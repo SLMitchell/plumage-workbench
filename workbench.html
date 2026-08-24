@@ -1,0 +1,965 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plumage Workbench</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--bg:#14130f;--panel:#1e1c17;--panel2:#26241d;--ink:#ece6d9;--mut:#9c9484;--line:#33302a;
+  --acc:#74b7ac;--A:#e0894f;--B:#5f9fd6;--warn:#f2b134;--bad:#c65b52;
+  --sans:ui-sans-serif,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px}
+header{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--line);
+  padding:8px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+h1{font-size:15px;margin:0;font-weight:700;letter-spacing:.01em}
+.tabs{display:flex;gap:4px;margin-left:8px}
+.tab{padding:6px 13px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);
+  color:var(--mut);cursor:pointer;font-weight:600}
+.tab.on{background:var(--acc);color:#14130f;border-color:var(--acc)}
+.tab:disabled{opacity:.4;cursor:default}
+.spacer{flex:1}
+.hint{font-family:var(--mono);font-size:12px;color:var(--mut)}
+button{font-family:var(--sans);font-size:13px;padding:6px 11px;border-radius:8px;
+  border:1px solid var(--line);background:var(--panel2);color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--acc)}
+button.primary{background:var(--acc);color:#14130f;border-color:var(--acc);font-weight:700}
+button.on{background:var(--acc);color:#14130f;border-color:var(--acc);font-weight:650}
+button:disabled{opacity:.4;cursor:default}
+input,select{font-family:var(--sans);font-size:13px;background:#100f0c;color:var(--ink);
+  border:1px solid var(--line);border-radius:7px;padding:6px 9px}
+input:focus,select:focus{outline:none;border-color:var(--acc)}
+label{color:var(--mut)}
+.view{display:none;padding:16px;max-width:1500px;margin:0 auto}
+.view.on{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.card h2{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--acc);margin:0 0 12px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.col{display:flex;flex-direction:column;gap:6px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:650}
+.pA{background:rgba(224,137,79,.16);color:var(--A)} .pB{background:rgba(95,159,214,.16);color:var(--B)}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+.ac{position:relative}
+.acbox{position:absolute;top:100%;left:0;right:0;background:var(--panel2);border:1px solid var(--line);
+  border-radius:8px;margin-top:2px;z-index:30;max-height:240px;overflow:auto;display:none}
+.acitem{padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--line)}
+.acitem:hover,.acitem.sel{background:var(--acc);color:#14130f}
+.acitem .sci{font-style:italic;font-size:12px;opacity:.8;margin-left:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.thumb{position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#0d0c0a;
+  aspect-ratio:1/1;cursor:pointer}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .tag{position:absolute;top:4px;left:4px;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:700}
+.thumb .st{position:absolute;bottom:4px;right:4px;font-size:11px;background:rgba(0,0,0,.6);border-radius:6px;padding:0 5px}
+.thumb.doneb{outline:2px solid var(--acc)}
+.mut{color:var(--mut)} .mono{font-family:var(--mono)}
+table{border-collapse:collapse;font-size:12.5px;font-family:var(--mono)}
+th,td{border:1px solid var(--line);padding:3px 8px;text-align:right}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--acc);font-weight:600}
+.reg-row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.chk{display:inline-flex;gap:5px;align-items:center;color:var(--ink);cursor:pointer;padding:3px 8px;
+  border:1px solid var(--line);border-radius:7px;background:var(--panel2)}
+.chk.on{background:var(--acc);color:#14130f;border-color:var(--acc)}
+.chk input{display:none}
+kbd{font-family:var(--mono);font-size:11px;background:var(--panel2);border:1px solid var(--line);
+  border-radius:5px;padding:1px 6px}
+/* annotate */
+.astage{position:relative;flex:1;min-width:320px;line-height:0;background:#0d0c0a;
+  border:1px solid var(--line);border-radius:12px;overflow:hidden;align-self:flex-start}
+.astage img{display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none}
+canvas.paint{position:absolute;inset:0;width:100%;height:100%;cursor:none;touch-action:none}
+.aside{width:300px;flex:none}
+.regbtn{display:flex;align-items:center;gap:7px;width:100%;justify-content:flex-start;margin-bottom:4px}
+.regbtn.on{outline:2px solid var(--acc)}
+#pcaWrap{position:relative}
+#pca{width:100%;max-width:820px;border:1px solid var(--line);border-radius:10px;background:#0d0c0a;display:block}
+.legend span{margin-right:14px;font-size:12px}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.statgrid{grid-template-columns:1fr}}
+.tag.A{background:var(--A);color:#14130f} .tag.B{background:var(--B);color:#14130f}
+.small{font-size:12px}
+.warnbox{background:rgba(242,177,52,.1);border:1px solid var(--warn);border-radius:8px;padding:8px 12px;color:var(--warn);font-size:12.5px}
+</style></head><body>
+<header>
+  <h1>🪶 Plumage Workbench</h1>
+  <div class="tabs">
+    <button class="tab on" data-v="query">1 · Query</button>
+    <button class="tab" data-v="features">2 · Features</button>
+    <button class="tab" data-v="annotate">3 · Annotate</button>
+    <button class="tab" data-v="analyse">4 · Analyse</button>
+    <button class="tab" data-v="map">5 · Map</button>
+  </div>
+  <span class="spacer"></span>
+  <span class="hint" id="hdr"></span>
+  <button id="resetAll" title="Clear workset, annotations and feature set">Reset</button>
+</header>
+
+<!-- ============ QUERY ============ -->
+<div class="view on" id="v-query">
+  <div class="card">
+    <h2>Pull image sets from Macaulay Library</h2>
+    <div class="row" style="align-items:flex-start">
+      <div class="col" style="flex:1;min-width:240px">
+        <label>Species A <span class="pill pA"><span class="sw" style="background:var(--A)"></span>A</span></label>
+        <div class="ac"><input id="qA" placeholder="type a species, e.g. Isabelline Shrike" autocomplete="off">
+          <div class="acbox" id="acA"></div></div>
+        <div class="hint" id="pickA">—</div>
+      </div>
+      <div class="col" style="flex:1;min-width:240px">
+        <label>Species B <span class="pill pB"><span class="sw" style="background:var(--B)"></span>B</span> <span class="mut small">(optional)</span></label>
+        <div class="ac"><input id="qB" placeholder="type a second species (optional)" autocomplete="off">
+          <div class="acbox" id="acB"></div></div>
+        <div class="hint" id="pickB">—</div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div class="col"><label>Age</label>
+        <div class="row">
+          <span class="chk" data-age="immature"><input type="checkbox" checked>immature</span>
+          <span class="chk" data-age="juvenile"><input type="checkbox">juvenile</span>
+          <span class="chk" data-age="adult"><input type="checkbox">adult</span>
+        </div>
+      </div>
+      <div class="col"><label>Per species</label>
+        <input id="qCount" type="number" min="1" max="500" value="60" style="width:90px"></div>
+      <div class="col"><label>Sort</label>
+        <select id="qSort">
+          <option value="rating_rank_desc">Best rated</option>
+          <option value="create_date_desc">Most recent</option>
+        </select></div>
+      <div class="col" style="align-self:flex-end">
+        <button class="primary" id="pull">Pull images</button></div>
+      <div class="hint" id="pullStat"></div>
+    </div>
+    <div style="margin-top:14px">
+      <label class="small">Metadata to carry through <span class="mut">(shown on birds, used for map & export)</span></label>
+      <div class="row" id="metaPick" style="margin-top:6px"></div>
+    </div>
+  </div>
+  <div class="card" id="worksetCard" style="display:none">
+    <h2>Working set — <span id="wsCount">0</span> images</h2>
+    <div class="hint" id="wsBreak" style="margin-bottom:10px"></div>
+    <div class="grid" id="wsGrid"></div>
+  </div>
+</div>
+
+<!-- ============ FEATURES ============ -->
+<div class="view" id="v-features">
+  <div class="card">
+    <h2>Regions — the parts of the bird you will paint & measure</h2>
+    <div id="regList"></div>
+    <div class="row" style="margin-top:8px">
+      <input id="newReg" placeholder="region name, e.g. crown, flank, bill-base" style="width:260px">
+      <button id="addReg">+ Add region</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Measurements — computed for every region</h2>
+    <div class="row" id="measList"></div>
+    <p class="hint" style="margin:12px 0 0">Colours are grey-world white-balanced, then converted to CIELAB.
+      <b>L*</b> lightness · <b>a*</b> red–green · <b>b*</b> blue–yellow (warmth) · chroma = colour intensity ·
+      R/G/B : photo = region's raw channel ÷ whole-photo mean. Chevron metrics measure dark barring/vermiculation texture.</p>
+  </div>
+  <div class="card">
+    <h2>Region contrasts <span class="mut small">(optional — difference between two regions)</span></h2>
+    <div id="contrastList"></div>
+    <div class="row" style="margin-top:8px">
+      <select id="cR1"></select><span class="mut">minus</span><select id="cR2"></select>
+      <select id="cM"></select>
+      <button id="addContrast">+ Add contrast</button>
+    </div>
+  </div>
+  <div class="card"><h2>Feature vector preview</h2>
+    <div class="mono small" id="featPreview" style="color:var(--mut)">—</div></div>
+</div>
+
+<!-- ============ ANNOTATE ============ -->
+<div class="view" id="v-annotate">
+  <div class="row" style="align-items:flex-start">
+    <div class="astage" id="astage">
+      <img id="aimg" alt="" crossorigin="anonymous">
+      <canvas class="paint" id="acv"></canvas>
+    </div>
+    <div class="aside">
+      <div class="card" style="margin-bottom:12px">
+        <div class="mono" id="aMeta" style="margin-bottom:8px"></div>
+        <div class="row" style="margin-bottom:8px">
+          <button id="aPrev">◀ Prev</button>
+          <button id="aNext">Next ▶</button>
+          <span class="hint" id="aProg"></span>
+        </div>
+        <label class="small">Paint region</label>
+        <div id="aRegBtns" style="margin:6px 0"></div>
+        <div class="row" style="margin:6px 0">
+          <label class="small">Brush</label>
+          <input id="aBrush" type="range" min="1" max="90" value="22" style="width:120px">
+          <span class="mono" id="aBsz">22</span>
+        </div>
+        <div class="row">
+          <button id="aErase">Erase (E)</button>
+          <button id="aUndo">Undo ⌫</button>
+          <button id="aClear">Clear region</button>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <button id="aExcl">Exclude bird (skip)</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Live measurements</h2>
+        <div id="aLive" class="mono small" style="color:var(--mut)">paint a region…</div>
+      </div>
+    </div>
+  </div>
+  <p class="hint" style="margin-top:8px"><kbd>Space</kbd>/<kbd>→</kbd> next · <kbd>←</kbd> prev ·
+    <kbd>E</kbd> erase · <kbd>[ ]</kbd> brush · <kbd>⌫</kbd> undo · number keys pick region.</p>
+</div>
+
+<!-- ============ ANALYSE ============ -->
+<div class="view" id="v-analyse">
+  <div class="card">
+    <h2>Build analysis</h2>
+    <div class="row">
+      <button class="primary" id="runPCA">Compute features & PCA</button>
+      <div class="col"><label class="small">Aggregate</label>
+        <select id="aggMode">
+          <option value="photo">per photo</option>
+          <option value="indiv">per individual (median)</option>
+        </select></div>
+      <div class="col"><label class="small">Colour points by</label>
+        <select id="colBy">
+          <option value="species">species (between)</option>
+          <option value="indiv">individual (within)</option>
+        </select></div>
+      <div class="col"><label class="small">Hulls</label>
+        <select id="hullMode">
+          <option value="species">per species</option>
+          <option value="indiv">per individual</option>
+          <option value="none">none</option>
+        </select></div>
+      <div class="hint" id="pcaStat"></div>
+    </div>
+  </div>
+  <div class="row" style="align-items:flex-start">
+    <div class="card" style="flex:none">
+      <h2>PCA</h2>
+      <div id="pcaWrap"><canvas id="pca" width="820" height="560"></canvas></div>
+      <div class="legend" id="pcaLegend" style="margin-top:8px"></div>
+      <div class="hint mono" id="pcaEV" style="margin-top:4px"></div>
+      <div id="pcaPick" class="small" style="margin-top:8px"></div>
+    </div>
+    <div class="col" style="flex:1;min-width:320px">
+      <div class="card"><h2>Between species (A vs B)</h2>
+        <div id="betweenBox" class="small mut">run the analysis…</div></div>
+      <div class="card"><h2>Within species (repeatability across photos of a bird)</h2>
+        <div id="withinBox" class="small mut">needs ≥2 photos of some individuals…</div></div>
+    </div>
+  </div>
+  <div class="card"><h2>Export</h2>
+    <div class="row">
+      <button id="expMatrix">Feature matrix CSV</button>
+      <button id="expAnn">Annotations JSON</button>
+      <button id="expPNG">PCA image PNG</button>
+    </div></div>
+</div>
+
+<!-- ============ MAP ============ -->
+<div class="view" id="v-map">
+  <div class="card">
+    <h2>Biogeography — feature / PCA variation in space</h2>
+    <div class="row">
+      <div class="col"><label class="small">Colour points by</label>
+        <select id="mapColBy"><option value="species">species</option></select></div>
+      <div class="col"><label class="small">Show</label>
+        <select id="mapWhich"><option value="all">all pulled</option><option value="annot">annotated only</option></select></div>
+      <button id="mapFit">Fit to points</button>
+      <div class="hint" id="mapStat"></div>
+    </div>
+    <p class="hint" style="margin:8px 0 0">Colour-by feature/PC options appear after you run the analysis (tab 4).
+      Continuous values use a blue→grey→orange scale; species uses the A/B colours.</p>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <div id="map" style="height:560px;width:100%;background:#0d0c0a"></div>
+  </div>
+  <div class="card" id="mapScale" style="display:none"><h2>Scale</h2><div id="mapScaleBody"></div></div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================ CONSTANTS */
+const EPS=1e-6, MAXW=900;
+const MEASURES=[
+  {k:"L",label:"L* lightness"},{k:"a",label:"a* red–green"},{k:"b",label:"b* warmth"},
+  {k:"chroma",label:"chroma"},{k:"sat",label:"saturation"},
+  {k:"R_rel",label:"R : photo"},{k:"G_rel",label:"G : photo"},{k:"B_rel",label:"B : photo"},
+  {k:"chev_bold",label:"chevron boldness"},{k:"chev_dens",label:"chevron density"},
+  {k:"chev_period",label:"chevron periodicity"},
+];
+const MLABEL=Object.fromEntries(MEASURES.map(m=>[m.k,m.label]));
+const REGCOLORS=["#f2b134","#3fa7d6","#b06fd6","#5fbf74","#e0894f","#e05f8a","#54c7c0","#c9c24a","#8f7de0"];
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const ce=(t,c)=>{const e=document.createElement(t);if(c)e.className=c;return e;};
+
+/* ============================================================ STATE */
+const LS="plumage_workbench_v1";
+let STATE=load()||{
+  workset:[],                         // [{assetId,sp:'A'|'B',spName,taxon,indiv,rating,meta}]
+  taxa:{A:null,B:null},               // {code,name,sci}
+  featureset:{regions:[],measures:["L","a","b","chroma"],contrasts:[]},
+  ann:{},                             // assetId -> {strokes:{regId:[stroke]},excl:false}
+};
+function load(){try{return JSON.parse(localStorage.getItem(LS));}catch(e){return null;}}
+function save(){localStorage.setItem(LS,JSON.stringify(STATE));}
+function fs(){return STATE.featureset;}
+const META_KEYS=[
+  {k:"rating",label:"rating"},{k:"obsDt",label:"date"},{k:"countryName",label:"country"},
+  {k:"subnational1Name",label:"region/state"},{k:"latitude",label:"lat"},{k:"longitude",label:"lon"},
+  {k:"userDisplayName",label:"observer"},{k:"licenseId",label:"license"},{k:"ageSexTag",label:"age/sex"},
+  {k:"ebirdChecklistId",label:"checklist"}];
+if(!STATE.metaFields)STATE.metaFields=["rating","obsDt","countryName","latitude","longitude"];
+function metaLine(bird){return STATE.metaFields.map(k=>{const v=bird.meta?bird.meta[k]:null;
+  return (v==null||v==="")?null:`${(META_KEYS.find(m=>m.k===k)||{}).label||k}: ${v}`;}).filter(Boolean).join(" · ");}
+
+/* ============================================================ TABS */
+$$(".tab").forEach(t=>t.onclick=()=>{
+  $$(".tab").forEach(x=>x.classList.toggle("on",x===t));
+  $$(".view").forEach(v=>v.classList.remove("on"));
+  $("#v-"+t.dataset.v).classList.add("on");
+  if(t.dataset.v==="features")renderFeatures();
+  if(t.dataset.v==="annotate")startAnnotate();
+  if(t.dataset.v==="analyse")refreshExportState();
+  if(t.dataset.v==="map")startMap();
+  updateHdr();
+});
+function updateHdr(){
+  const w=STATE.workset,a=Object.values(STATE.ann).filter(x=>hasInk(x)).length;
+  $("#hdr").textContent=`${w.length} images · ${fs().regions.length} regions · ${a} annotated`;
+}
+
+/* ============================================================ QUERY: autocomplete */
+function wireAC(inputId,boxId,slot){
+  const inp=$("#"+inputId),box=$("#"+boxId);let items=[],sel=-1,timer=null;
+  inp.addEventListener("input",()=>{clearTimeout(timer);timer=setTimeout(async()=>{
+    const q=inp.value.trim();if(q.length<2){box.style.display="none";return;}
+    const r=await fetch("/api/taxon?q="+encodeURIComponent(q));items=await r.json();
+    box.innerHTML="";sel=-1;
+    items.forEach((it,i)=>{const d=ce("div","acitem");
+      d.innerHTML=`${it.name}<span class="sci">${it.sci||""}</span>`;
+      d.onclick=()=>choose(i);box.appendChild(d);});
+    box.style.display=items.length?"block":"none";
+  },220);});
+  inp.addEventListener("keydown",e=>{
+    if(box.style.display==="none")return;
+    if(e.key==="ArrowDown"){sel=Math.min(items.length-1,sel+1);hi();e.preventDefault();}
+    else if(e.key==="ArrowUp"){sel=Math.max(0,sel-1);hi();e.preventDefault();}
+    else if(e.key==="Enter"&&sel>=0){choose(sel);e.preventDefault();}
+    else if(e.key==="Escape")box.style.display="none";});
+  function hi(){[...box.children].forEach((c,i)=>c.classList.toggle("sel",i===sel));}
+  function choose(i){const it=items[i];STATE.taxa[slot]=it;inp.value=it.name;
+    box.style.display="none";$("#pick"+slot).textContent=`✓ ${it.name} — ${it.sci} (${it.code})`;save();}
+  document.addEventListener("click",e=>{if(!box.contains(e.target)&&e.target!==inp)box.style.display="none";});
+}
+wireAC("qA","acA","A");wireAC("qB","acB","B");
+$$(".chk[data-age]").forEach(c=>c.onclick=()=>{const cb=c.querySelector("input");cb.checked=!cb.checked;c.classList.toggle("on",cb.checked);});
+$$(".chk[data-age]").forEach(c=>c.classList.toggle("on",c.querySelector("input").checked));
+
+/* ============================================================ QUERY: pull */
+$("#pull").onclick=async()=>{
+  const ages=$$(".chk[data-age]").filter(c=>c.querySelector("input").checked).map(c=>c.dataset.age);
+  const count=+$("#qCount").value, sort=$("#qSort").value;
+  const st=$("#pullStat");
+  if(!STATE.taxa.A){st.textContent="pick species A first";return;}
+  st.textContent="pulling…";$("#pull").disabled=true;
+  const set=[];
+  for(const slot of ["A","B"]){
+    const tx=STATE.taxa[slot];if(!tx)continue;
+    const url=`/api/search?taxon=${tx.code}&age=${ages.join(",")}&count=${count}&sort=${sort}`;
+    try{const r=await fetch(url);const j=await r.json();
+      (j.assets||[]).forEach(it=>set.push({
+        assetId:it.assetId,sp:slot,spName:tx.name,taxon:tx.code,
+        indiv:it.ebirdChecklistId||("solo_"+it.assetId),
+        rating:it.rating,meta:it}));
+      st.textContent=`A:${set.filter(b=>b.sp==="A").length}  B:${set.filter(b=>b.sp==="B").length}`;
+    }catch(e){st.textContent="error: "+e;}
+  }
+  STATE.workset=set;save();renderWorkset();updateHdr();$("#pull").disabled=false;
+};
+function renderMetaPick(){const box=$("#metaPick");box.innerHTML="";
+  META_KEYS.forEach(m=>{const on=STATE.metaFields.includes(m.k);
+    const c=ce("label","chk"+(on?" on":""));c.innerHTML=`<input type="checkbox" ${on?"checked":""}>${m.label}`;
+    c.onclick=e=>{e.preventDefault();const i=STATE.metaFields.indexOf(m.k);
+      if(i>=0)STATE.metaFields.splice(i,1);else STATE.metaFields.push(m.k);save();renderMetaPick();};
+    box.appendChild(c);});}
+function renderWorkset(){
+  const w=STATE.workset;$("#worksetCard").style.display=w.length?"block":"none";
+  $("#wsCount").textContent=w.length;
+  const a=w.filter(b=>b.sp==="A").length,b=w.filter(x=>x.sp==="B").length;
+  $("#wsBreak").innerHTML=`<span class="pill pA">A · ${STATE.taxa.A?STATE.taxa.A.name:""} · ${a}</span>
+    ${STATE.taxa.B?`<span class="pill pB">B · ${STATE.taxa.B.name} · ${b}</span>`:""}`;
+  const g=$("#wsGrid");g.innerHTML="";
+  w.forEach((bird,i)=>{const t=ce("div","thumb");
+    const done=STATE.ann[bird.assetId]&&hasInk(STATE.ann[bird.assetId]);
+    if(done)t.classList.add("doneb");
+    t.innerHTML=`<img loading="lazy" src="/img/${bird.assetId}/320">
+      <span class="tag ${bird.sp}">${bird.sp}</span>
+      <span class="st">★${bird.rating??"–"}</span>`;
+    t.onclick=()=>{annIndex=i;$$(".tab").find(x=>x.dataset.v==="annotate").click();};
+    g.appendChild(t);});
+}
+
+/* ============================================================ FEATURES editor */
+function renderFeatures(){
+  const rl=$("#regList");rl.innerHTML="";
+  fs().regions.forEach((rg,i)=>{const row=ce("div","reg-row");
+    row.innerHTML=`<span class="sw" style="background:${rg.color}"></span>
+      <input value="${rg.name}" data-i="${i}" class="rgName" style="width:220px">
+      <button data-i="${i}" class="rgDel">remove</button>`;
+    rl.appendChild(row);});
+  $$(".rgName").forEach(inp=>inp.onchange=()=>{fs().regions[+inp.dataset.i].name=inp.value.trim()||"region";save();renderFeatures();});
+  $$(".rgDel").forEach(b=>b.onclick=()=>{const id=fs().regions[+b.dataset.i].id;
+    fs().regions.splice(+b.dataset.i,1);
+    fs().contrasts=fs().contrasts.filter(c=>c.r1!==id&&c.r2!==id);save();renderFeatures();});
+  // measures
+  const ml=$("#measList");ml.innerHTML="";
+  MEASURES.forEach(m=>{const on=fs().measures.includes(m.k);
+    const c=ce("label","chk"+(on?" on":""));c.innerHTML=`<input type="checkbox" ${on?"checked":""}>${m.label}`;
+    c.onclick=e=>{e.preventDefault();const idx=fs().measures.indexOf(m.k);
+      if(idx>=0)fs().measures.splice(idx,1);else fs().measures.push(m.k);save();renderFeatures();};
+    ml.appendChild(c);});
+  // contrasts selectors
+  const opts=fs().regions.map(r=>`<option value="${r.id}">${r.name}</option>`).join("");
+  $("#cR1").innerHTML=opts;$("#cR2").innerHTML=opts;
+  $("#cM").innerHTML=MEASURES.map(m=>`<option value="${m.k}">${m.label}</option>`).join("");
+  const cl=$("#contrastList");cl.innerHTML="";
+  fs().contrasts.forEach((c,i)=>{const rn=id=>{const r=fs().regions.find(x=>x.id===id);return r?r.name:"?";};
+    const row=ce("div","reg-row");
+    row.innerHTML=`<span class="mono small">${rn(c.r1)} − ${rn(c.r2)} · ${MLABEL[c.m]}</span>
+      <button data-i="${i}" class="cDel">remove</button>`;cl.appendChild(row);});
+  $$(".cDel").forEach(b=>b.onclick=()=>{fs().contrasts.splice(+b.dataset.i,1);save();renderFeatures();});
+  featPreview();updateHdr();
+}
+$("#addReg").onclick=()=>{const n=$("#newReg").value.trim();if(!n)return;
+  const id="r"+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36);
+  const color=REGCOLORS[fs().regions.length%REGCOLORS.length];
+  fs().regions.push({id,name:n,color});$("#newReg").value="";save();renderFeatures();};
+$("#addContrast").onclick=()=>{const r1=$("#cR1").value,r2=$("#cR2").value,m=$("#cM").value;
+  if(!r1||!r2||r1===r2)return;fs().contrasts.push({r1,r2,m});save();renderFeatures();};
+function featureNames(){
+  const names=[];
+  fs().regions.forEach(r=>fs().measures.forEach(m=>names.push(r.name+"."+m)));
+  fs().contrasts.forEach(c=>{const rn=id=>{const r=fs().regions.find(x=>x.id===id);return r?r.name:"?";};
+    names.push(`${rn(c.r1)}−${rn(c.r2)}.${c.m}`);});
+  return names;
+}
+function featPreview(){const n=featureNames();
+  $("#featPreview").textContent=n.length?n.join("   ·   "):"add regions and measurements";}
+
+/* ============================================================ IMAGE PIPELINE (port of features.py) */
+function srgb2lin(c){return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4);}
+// process an ImageData -> per-pixel gw rgb, lab, gray, plus whole-photo original mean
+function analyzeImage(imgData,W,H){
+  const d=imgData.data,N=W*H;
+  const oR=new Float32Array(N),oG=new Float32Array(N),oB=new Float32Array(N);
+  let sR=0,sG=0,sB=0;
+  for(let i=0,p=0;i<N;i++,p+=4){const r=d[p]/255,g=d[p+1]/255,b=d[p+2]/255;
+    oR[i]=r;oG[i]=g;oB[i]=b;sR+=r;sG+=g;sB+=b;}
+  const mR=sR/N,mG=sG/N,mB=sB/N,gAvg=(mR+mG+mB)/3;
+  const kR=gAvg/(mR+EPS),kG=gAvg/(mG+EPS),kB=gAvg/(mB+EPS);
+  const L=new Float32Array(N),A=new Float32Array(N),Bb=new Float32Array(N),
+        gray=new Float32Array(N),sat=new Float32Array(N);
+  const wl=[0.95047,1.0,1.08883],dd=6/29,dd3=dd*dd*dd;
+  for(let i=0;i<N;i++){
+    let r=Math.min(1,oR[i]*kR),g=Math.min(1,oG[i]*kG),b=Math.min(1,oB[i]*kB);
+    gray[i]=(r+g+b)/3;
+    const mx=Math.max(r,g,b),mn=Math.min(r,g,b);sat[i]=(mx-mn)/(mx+EPS);
+    const rl=srgb2lin(r),gl=srgb2lin(g),bl=srgb2lin(b);
+    let x=(0.4124*rl+0.3576*gl+0.1805*bl)/wl[0];
+    let y=(0.2126*rl+0.7152*gl+0.0722*bl)/wl[1];
+    let z=(0.0193*rl+0.1192*gl+0.9505*bl)/wl[2];
+    const f=t=>t>dd3?Math.cbrt(t):t/(3*dd*dd)+4/29;
+    const fx=f(x),fy=f(y),fz=f(z);
+    L[i]=116*fy-16;A[i]=500*(fx-fy);Bb[i]=200*(fy-fz);
+  }
+  return {W,H,oR,oG,oB,L,A,B:Bb,gray,sat,mR:mR+EPS,mG:mG+EPS,mB:mB+EPS};
+}
+// build region mask (Uint8) from strokes at W×H
+function strokesMask(strokes,W,H){
+  const m=new Uint8Array(W*H);let any=false;
+  (strokes||[]).forEach(s=>{const rpx=Math.max(1,s.r*W),val=s.e?0:1;
+    (s.pts||[]).forEach(pt=>{const cx=pt[0]*W,cy=pt[1]*H;
+      const x0=Math.max(0,Math.floor(cx-rpx)),x1=Math.min(W-1,Math.ceil(cx+rpx));
+      const y0=Math.max(0,Math.floor(cy-rpx)),y1=Math.min(H-1,Math.ceil(cy+rpx));
+      const r2=rpx*rpx;
+      for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+        const dx=x-cx,dy=y-cy;if(dx*dx+dy*dy<=r2){m[y*W+x]=val;if(val)any=true;}}});});
+  return any?m:null;
+}
+function boxBlur2D(patch,pw,ph,k){ // separable moving average, reflect edges
+  const half=Math.max(1,Math.floor(k/2)),tmp=new Float32Array(pw*ph),out=new Float32Array(pw*ph);
+  const refl=(i,n)=>i<0?-i-1:(i>=n?2*n-i-1:i);
+  for(let y=0;y<ph;y++)for(let x=0;x<pw;x++){let s=0,c=0;
+    for(let j=-half;j<=half;j++){s+=patch[y*pw+refl(x+j,pw)];c++;}tmp[y*pw+x]=s/c;}
+  for(let y=0;y<ph;y++)for(let x=0;x<pw;x++){let s=0,c=0;
+    for(let j=-half;j<=half;j++){s+=tmp[refl(y+j,ph)*pw+x];c++;}out[y*pw+x]=s/c;}
+  return out;
+}
+function chevron(gray,mask,W,H){
+  // bbox of region
+  let x0=W,y0=H,x1=-1,y1=-1;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(mask[y*W+x]){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}
+  const pw=x1-x0+1,ph=y1-y0+1;if(pw<8||ph<8||x1<0)return{bold:NaN,dens:NaN,period:NaN};
+  const patch=new Float32Array(pw*ph),pmask=new Uint8Array(pw*ph);let n=0;
+  for(let y=0;y<ph;y++)for(let x=0;x<pw;x++){const gi=(y+y0)*W+(x+x0);
+    patch[y*pw+x]=gray[gi];if(mask[gi]){pmask[y*pw+x]=1;n++;}}
+  if(n<30)return{bold:NaN,dens:NaN,period:NaN};
+  const k=Math.max(5,Math.floor(ph/8)),loc=boxBlur2D(patch,pw,ph,k);
+  let s=0,s2=0,dark=0;const resid=new Float32Array(pw*ph);
+  for(let i=0;i<pw*ph;i++){if(pmask[i]){const r=patch[i]-loc[i];resid[i]=r;s+=r;s2+=r*r;if(r<-0.06)dark++;}}
+  const mean=s/n,bold=Math.sqrt(Math.max(0,s2/n-mean*mean)),dens=dark/n;
+  // periodicity: column-mean profile along x, DFT peak share
+  const prof=[];for(let x=0;x<pw;x++){let ss=0,cc=0;for(let y=0;y<ph;y++)if(pmask[y*pw+x]){ss+=patch[y*pw+x];cc++;}
+    if(cc)prof.push(ss/cc);}
+  let period=0;
+  if(prof.length>16){const L=prof.length,pm=prof.reduce((a,b)=>a+b,0)/L;
+    const win=prof.map((v,i)=>(v-pm)*(0.5-0.5*Math.cos(2*Math.PI*i/(L-1))));
+    const mag=[];const K=Math.floor(L/2);
+    for(let f=0;f<=K;f++){let re=0,im=0;for(let t=0;t<L;t++){const a=-2*Math.PI*f*t/L;re+=win[t]*Math.cos(a);im+=win[t]*Math.sin(a);}mag.push(Math.hypot(re,im));}
+    let tot=0;for(let f=1;f<mag.length;f++)tot+=mag[f];
+    if(tot>EPS){let mx=0;for(let f=2;f<=K;f++)if(mag[f]>mx)mx=mag[f];period=mx/(tot+EPS);}}
+  return{bold,dens,period};
+}
+function regionStats(A,mask){ // A=analyzeImage result; returns all measures or nulls
+  const {W,H,oR,oG,oB,L,A:aa,B:bb,gray,sat,mR,mG,mB}=A;
+  let n=0,sL=0,sa=0,sb=0,sc=0,ss=0,sR=0,sG=0,sB=0;
+  for(let i=0;i<W*H;i++)if(mask[i]){n++;sL+=L[i];sa+=aa[i];sb+=bb[i];
+    sc+=Math.hypot(aa[i],bb[i]);ss+=sat[i];sR+=oR[i];sG+=oG[i];sB+=oB[i];}
+  if(n<30)return null;
+  const chev=chevron(gray,mask,W,H);
+  return {L:sL/n,a:sa/n,b:sb/n,chroma:sc/n,sat:ss/n,
+    R_rel:(sR/n)/mR,G_rel:(sG/n)/mG,B_rel:(sB/n)/mB,
+    chev_bold:chev.bold,chev_dens:chev.dens,chev_period:chev.period,n};
+}
+
+/* ============================================================ ANNOTATE */
+let annIndex=0,paintReg=null,eraseOn=false,brushPx=22,painting=false,curStroke=null,IW=1,IH=1;
+let mx=-99,my=-99, procCache={}; // assetId -> analyzeImage result (working res)
+const aimg=$("#aimg"),acv=$("#acv"),actx=acv.getContext("2d",{willReadFrequently:true});
+const workCanvas=ce("canvas"); // offscreen for pixel math
+function curBird(){return STATE.workset[annIndex];}
+function annRec(b){const id=b.assetId;if(!STATE.ann[id])STATE.ann[id]={strokes:{},excl:false};
+  const r=STATE.ann[id];if(!r.strokes)r.strokes={};return r;}
+function hasInk(rec){return rec&&rec.strokes&&Object.values(rec.strokes).some(a=>a&&a.some(s=>s.pts&&s.pts.length));}
+
+function startAnnotate(){
+  if(!STATE.workset.length){$("#aMeta").textContent="Pull an image set first (tab 1).";return;}
+  if(!fs().regions.length){$("#aMeta").textContent="Define at least one region (tab 2).";return;}
+  if(!paintReg||!fs().regions.find(r=>r.id===paintReg))paintReg=fs().regions[0].id;
+  renderRegBtns();loadBird();
+}
+function renderRegBtns(){const box=$("#aRegBtns");box.innerHTML="";
+  fs().regions.forEach((r,i)=>{const b=ce("button","regbtn"+(r.id===paintReg?" on":""));
+    b.innerHTML=`<span class="sw" style="background:${r.color}"></span>${i+1}. ${r.name}`;
+    b.onclick=()=>{paintReg=r.id;renderRegBtns();redraw();};box.appendChild(b);});}
+function loadBird(){const b=curBird();
+  procCache={}; // free memory of previous
+  aimg.onload=()=>{IW=aimg.naturalWidth;IH=aimg.naturalHeight;
+    // working canvas at <=MAXW
+    const scale=Math.min(1,MAXW/Math.max(IW,IH));
+    workCanvas.width=Math.round(IW*scale);workCanvas.height=Math.round(IH*scale);
+    acv.width=workCanvas.width;acv.height=workCanvas.height;
+    replayAndDraw();liveMeasure();};
+  aimg.src="/img/"+b.assetId+"/1200";
+  const done=hasInk(STATE.ann[b.assetId]);
+  $("#aMeta").innerHTML=`#<b>${b.assetId}</b> <span class="pill p${b.sp}">${b.sp} · ${b.spName}</span>
+     <a href="https://macaulaylibrary.org/asset/${b.assetId}" target="_blank" style="color:var(--acc);font-size:12px"> source ↗</a>
+     <br><span class="mut">${metaLine(b)||("indiv "+b.indiv)}</span>`;
+  $("#aProg").textContent=`${annIndex+1} / ${STATE.workset.length}${done?" ✓":""}`;
+  $("#aExcl").classList.toggle("on",STATE.ann[b.assetId]&&STATE.ann[b.assetId].excl);
+}
+function getStrokes(regId){const r=annRec(curBird());if(!r.strokes[regId])r.strokes[regId]=[];return r.strokes[regId];}
+function drawMaskOverlay(){const W=acv.width,H=acv.height;actx.clearRect(0,0,W,H);
+  fs().regions.forEach(r=>{const strokes=getStrokes(r.id);const m=strokesMask(strokes,W,H);if(!m)return;
+    const img=actx.createImageData(W,H),col=hexRGB(r.color);const alpha=r.id===paintReg?150:70;
+    for(let i=0;i<W*H;i++)if(m[i]){img.data[i*4]=col[0];img.data[i*4+1]=col[1];img.data[i*4+2]=col[2];img.data[i*4+3]=alpha;}
+    actx.putImageData(img,0,0);});}
+function hexRGB(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function replayAndDraw(){drawMaskOverlay();drawCursor();}
+function redraw(){replayAndDraw();}
+function drawCursor(){if(mx<-1)return;const rect=acv.getBoundingClientRect();const rpx=brushPx*acv.width/rect.width;
+  actx.beginPath();actx.arc(mx,my,rpx,0,7);const r=fs().regions.find(x=>x.id===paintReg);
+  actx.strokeStyle=eraseOn?"#fff":(r?r.color:"#fff");actx.lineWidth=Math.max(1.2,acv.width/500);
+  actx.setLineDash([acv.width/120,acv.width/120]);actx.stroke();actx.setLineDash([]);}
+function pos(e){const rect=acv.getBoundingClientRect();
+  return [Math.max(0,Math.min(acv.width,(e.clientX-rect.left)/rect.width*acv.width)),
+          Math.max(0,Math.min(acv.height,(e.clientY-rect.top)/rect.height*acv.height)),
+          brushPx*acv.width/rect.width];}
+function addPt(x,y){curStroke.pts.push([+(x/acv.width).toFixed(4),+(y/acv.height).toFixed(4)]);}
+acv.addEventListener("pointerdown",e=>{if(!paintReg)return;e.preventDefault();acv.setPointerCapture(e.pointerId);
+  const[x,y,rpx]=pos(e);curStroke={r:+(rpx/acv.width).toFixed(4),e:eraseOn,pts:[]};
+  getStrokes(paintReg).push(curStroke);painting=true;addPt(x,y);mx=x;my=y;
+  const r=annRec(curBird());r.excl=false;redraw();});
+acv.addEventListener("pointermove",e=>{const[x,y,rpx]=pos(e);mx=x;my=y;
+  if(painting){const p=curStroke.pts,last=p.length?[p[p.length-1][0]*acv.width,p[p.length-1][1]*acv.height]:[x,y];
+    const dx=x-last[0],dy=y-last[1],dist=Math.hypot(dx,dy),step=Math.max(rpx*0.3,1),nn=Math.floor(dist/step);
+    for(let j=1;j<=nn;j++)addPt(last[0]+dx*j/nn,last[1]+dy*j/nn);if(nn===0&&p.length===0)addPt(x,y);}
+  redraw();});
+function endStroke(){if(painting){painting=false;curStroke=null;save();updateHdr();liveMeasure();renderWorksetDot();}}
+acv.addEventListener("pointerup",endStroke);acv.addEventListener("pointercancel",endStroke);
+acv.addEventListener("pointerleave",()=>{mx=-99;redraw();});
+function renderWorksetDot(){/* lightweight: mark grid dirty on next render */}
+
+function getProc(){const id=curBird().assetId;if(procCache[id])return procCache[id];
+  const W=acv.width,H=acv.height;workCanvas.width=W;workCanvas.height=H;
+  const wctx=workCanvas.getContext("2d",{willReadFrequently:true});
+  try{wctx.drawImage(aimg,0,0,W,H);const idata=wctx.getImageData(0,0,W,H);
+    const A=analyzeImage(idata,W,H);procCache[id]=A;return A;}
+  catch(err){$("#aLive").innerHTML=`<span style="color:var(--bad)">pixel read blocked: ${err.message}</span>`;return null;}}
+function liveMeasure(){const A=getProc();if(!A)return;const W=acv.width,H=acv.height;
+  let html="";fs().regions.forEach(r=>{const m=strokesMask(getStrokes(r.id),W,H);
+    if(!m){return;}const st=regionStats(A,m);if(!st){html+=`<div><span class="sw" style="background:${r.color}"></span>${r.name}: too small</div>`;return;}
+    const vals=fs().measures.map(k=>`${k}=${fmt(st[k])}`).join("  ");
+    html+=`<div style="margin-bottom:4px"><span class="sw" style="background:${r.color}"></span><b>${r.name}</b> <span class="mut">(${st.n}px)</span><br>${vals}</div>`;});
+  $("#aLive").innerHTML=html||"paint a region…";}
+function fmt(v){return (v==null||isNaN(v))?"–":(Math.abs(v)<10?v.toFixed(3):v.toFixed(1));}
+$("#aBrush").oninput=e=>{brushPx=+e.target.value;$("#aBsz").textContent=brushPx;redraw();};
+$("#aErase").onclick=()=>{eraseOn=!eraseOn;$("#aErase").classList.toggle("on",eraseOn);redraw();};
+$("#aUndo").onclick=()=>{const s=getStrokes(paintReg);if(s.length){s.pop();save();redraw();liveMeasure();}};
+$("#aClear").onclick=()=>{annRec(curBird()).strokes[paintReg]=[];save();redraw();liveMeasure();};
+$("#aExcl").onclick=()=>{const r=annRec(curBird());r.excl=!r.excl;$("#aExcl").classList.toggle("on",r.excl);save();updateHdr();};
+$("#aPrev").onclick=()=>go(-1);$("#aNext").onclick=()=>go(1);
+function go(n){annIndex=Math.max(0,Math.min(STATE.workset.length-1,annIndex+n));loadBird();}
+document.addEventListener("keydown",e=>{if($("#v-annotate").classList.contains("on")===false)return;
+  if(e.target.tagName==="INPUT"||e.target.tagName==="SELECT")return;const k=e.key.toLowerCase();
+  if(e.key===" "||e.key==="ArrowRight"){e.preventDefault();go(1);}
+  else if(e.key==="ArrowLeft")go(-1);
+  else if(k==="e"){eraseOn=!eraseOn;$("#aErase").classList.toggle("on",eraseOn);redraw();}
+  else if(e.key==="[")$("#aBrush").value=brushPx=Math.max(1,brushPx-2),$("#aBsz").textContent=brushPx,redraw();
+  else if(e.key==="]")$("#aBrush").value=brushPx=Math.min(90,brushPx+2),$("#aBsz").textContent=brushPx,redraw();
+  else if(e.key==="Backspace"){e.preventDefault();$("#aUndo").click();}
+  else if(/[0-9]/.test(k)){const i=+k-1;if(fs().regions[i]){paintReg=fs().regions[i].id;renderRegBtns();redraw();}}});
+
+/* ============================================================ FEATURE MATRIX + PCA + STATS */
+let LAST=null; // {names, rows:[{bird,label,indiv,vec}], scores, ev}
+async function buildMatrix(){
+  const names=featureNames();if(!names.length){$("#pcaStat").textContent="define features first";return null;}
+  const birds=STATE.workset.filter(b=>{const r=STATE.ann[b.assetId];return r&&hasInk(r)&&!r.excl;});
+  if(birds.length<3){$("#pcaStat").textContent="annotate at least 3 birds";return null;}
+  const rows=[];
+  for(let i=0;i<birds.length;i++){const b=birds[i];
+    $("#pcaStat").textContent=`measuring ${i+1}/${birds.length}…`;
+    const A=await loadProcFor(b.assetId);if(!A)continue;
+    const W=A.W,H=A.H,rec=STATE.ann[b.assetId];
+    const stByReg={};fs().regions.forEach(r=>{const m=strokesMask(rec.strokes[r.id],W,H);stByReg[r.id]=m?regionStats(A,m):null;});
+    const vec=[];
+    fs().regions.forEach(r=>fs().measures.forEach(mk=>{const s=stByReg[r.id];vec.push(s?s[mk]:NaN);}));
+    fs().contrasts.forEach(c=>{const s1=stByReg[c.r1],s2=stByReg[c.r2];
+      vec.push((s1&&s2)?(s1[c.m]-s2[c.m]):NaN);});
+    rows.push({bird:b,label:b.sp,indiv:b.indiv+"|"+b.sp,vec});}
+  return {names,rows};
+}
+// load an image off-DOM, decode, process — for batch measuring
+function loadProcFor(assetId){return new Promise(res=>{
+  const im=new Image();im.crossOrigin="anonymous";
+  im.onload=()=>{const scale=Math.min(1,MAXW/Math.max(im.naturalWidth,im.naturalHeight));
+    const W=Math.round(im.naturalWidth*scale),H=Math.round(im.naturalHeight*scale);
+    const c=ce("canvas");c.width=W;c.height=H;const cx=c.getContext("2d",{willReadFrequently:true});
+    try{cx.drawImage(im,0,0,W,H);res(analyzeImage(cx.getImageData(0,0,W,H),W,H));}
+    catch(e){res(null);}};
+  im.onerror=()=>res(null);im.src="/img/"+assetId+"/1200";});}
+
+function aggregate(mat){ // per-individual median
+  const groups={};mat.rows.forEach(r=>{(groups[r.indiv]=groups[r.indiv]||[]).push(r);});
+  const rows=[];Object.entries(groups).forEach(([indiv,rs])=>{
+    const vec=mat.names.map((_,j)=>median(rs.map(r=>r.vec[j]).filter(v=>!isNaN(v))));
+    rows.push({bird:rs[0].bird,label:rs[0].label,indiv,vec,n:rs.length});});
+  return {names:mat.names,rows};
+}
+function median(a){if(!a.length)return NaN;const s=[...a].sort((x,y)=>x-y),h=Math.floor(s.length/2);
+  return s.length%2?s[h]:(s[h-1]+s[h])/2;}
+
+// standardize + drop all-NaN cols; mean-impute; return matrix + kept names
+function prep(mat){
+  const P=mat.names.length,rows=mat.rows;
+  const keep=[];for(let j=0;j<P;j++){const col=rows.map(r=>r.vec[j]).filter(v=>!isNaN(v));
+    if(col.length>=Math.max(3,rows.length*0.4)&&stdev(col)>1e-9)keep.push(j);}
+  const names=keep.map(j=>mat.names[j]);
+  const means=keep.map(j=>mean(rows.map(r=>r.vec[j]).filter(v=>!isNaN(v))));
+  const sds=keep.map((j,ji)=>stdev(rows.map(r=>r.vec[j]).filter(v=>!isNaN(v))));
+  const X=rows.map(r=>keep.map((j,ji)=>{let v=r.vec[j];if(isNaN(v))v=means[ji];return (v-means[ji])/(sds[ji]+EPS);}));
+  return {X,names,rows,keepIdx:keep,means,sds};
+}
+function mean(a){return a.reduce((x,y)=>x+y,0)/a.length;}
+function stdev(a){if(a.length<2)return 0;const m=mean(a);return Math.sqrt(a.reduce((s,v)=>s+(v-m)*(v-m),0)/a.length);}
+
+// covariance (p×p) of standardized X (n×p)
+function pca(X){const n=X.length,p=X[0].length;
+  const C=Array.from({length:p},()=>new Float64Array(p));
+  for(let a=0;a<p;a++)for(let b=a;b<p;b++){let s=0;for(let i=0;i<n;i++)s+=X[i][a]*X[i][b];
+    C[a][b]=C[b][a]=s/(n-1);}
+  const {vals,vecs}=jacobiEig(C);
+  const order=vals.map((v,i)=>[v,i]).sort((x,y)=>y[0]-x[0]).map(x=>x[1]);
+  const ev=order.map(i=>vals[i]),tot=ev.reduce((a,b)=>a+Math.max(0,b),0);
+  const pc=[0,1].map(k=>order[k]);
+  const scores=X.map(row=>pc.map(ci=>{let s=0;for(let j=0;j<p;j++)s+=row[j]*vecs[j][ci];return s;}));
+  return {scores,evr:[ev[0]/tot*100,ev[1]/tot*100],loadings:pc.map(ci=>vecs.map(r=>r[ci]))};
+}
+// Jacobi eigenvalue for symmetric matrix
+function jacobiEig(Ain){const n=Ain.length;const A=Ain.map(r=>Float64Array.from(r));
+  const V=Array.from({length:n},(_,i)=>{const r=new Float64Array(n);r[i]=1;return r;});
+  for(let sweep=0;sweep<100;sweep++){let off=0;
+    for(let p=0;p<n;p++)for(let q=p+1;q<n;q++)off+=A[p][q]*A[p][q];
+    if(off<1e-12)break;
+    for(let p=0;p<n;p++)for(let q=p+1;q<n;q++){if(Math.abs(A[p][q])<1e-15)continue;
+      const app=A[p][p],aqq=A[q][q],apq=A[p][q];const phi=0.5*Math.atan2(2*apq,aqq-app);
+      const c=Math.cos(phi),s=Math.sin(phi);
+      for(let k=0;k<n;k++){const akp=A[k][p],akq=A[k][q];A[k][p]=c*akp-s*akq;A[k][q]=s*akp+c*akq;}
+      for(let k=0;k<n;k++){const apk=A[p][k],aqk=A[q][k];A[p][k]=c*apk-s*aqk;A[q][k]=s*apk+c*aqk;}
+      for(let k=0;k<n;k++){const vkp=V[k][p],vkq=V[k][q];V[k][p]=c*vkp-s*vkq;V[k][q]=s*vkp+c*vkq;}}}
+  return {vals:A.map((r,i)=>r[i]),vecs:V};
+}
+
+/* ---- stats ---- */
+function cohenD(x,y){x=x.filter(v=>!isNaN(v));y=y.filter(v=>!isNaN(v));if(x.length<2||y.length<2)return NaN;
+  const vx=varr(x),vy=varr(y);const sp=Math.sqrt(((x.length-1)*vx+(y.length-1)*vy)/(x.length+y.length-2));
+  return (mean(x)-mean(y))/(sp+1e-9);}
+function varr(a){const m=mean(a);return a.reduce((s,v)=>s+(v-m)*(v-m),0)/(a.length-1);}
+function auc(x,y){x=x.filter(v=>!isNaN(v));y=y.filter(v=>!isNaN(v));if(x.length<2||y.length<2)return NaN;
+  const all=x.map(v=>[v,0]).concat(y.map(v=>[v,1])).sort((a,b)=>a[0]-b[0]);
+  let rank=1,i=0;const rk=new Array(all.length);
+  while(i<all.length){let j=i;while(j<all.length&&all[j][0]===all[i][0])j++;const avg=(rank+(rank+j-i-1))/2;
+    for(let t=i;t<j;t++)rk[t]=avg;rank+=j-i;i=j;}
+  let s=0;all.forEach((v,idx)=>{if(v[1]===0)s+=rk[idx];});
+  const u=s-x.length*(x.length+1)/2,a=u/(x.length*y.length);return Math.max(a,1-a);}
+// one-way ICC(1): groups = individuals (within one species)
+function icc1(values,groups){ // arrays aligned; returns ICC across groups with >=2 members counted
+  const g={};values.forEach((v,i)=>{if(isNaN(v))return;(g[groups[i]]=g[groups[i]]||[]).push(v);});
+  const keys=Object.keys(g);const all=[].concat(...keys.map(k=>g[k]));if(all.length<4)return NaN;
+  const grand=mean(all);let SSB=0,SSW=0,N=all.length,kg=keys.length;
+  keys.forEach(k=>{const grp=g[k],gm=mean(grp);SSB+=grp.length*(gm-grand)*(gm-grand);
+    grp.forEach(v=>SSW+=(v-gm)*(v-gm));});
+  const dfB=kg-1,dfW=N-kg;if(dfB<1||dfW<1)return NaN;
+  const MSB=SSB/dfB,MSW=SSW/dfW;
+  const k0=(N-keys.reduce((s,k)=>s+g[k].length*g[k].length,0)/N)/dfB; // avg group size adj
+  const icc=(MSB-MSW)/(MSB+(k0-1)*MSW);return icc;}
+function silhouette(scores,labels){const n=scores.length;let tot=0,cnt=0;
+  for(let i=0;i<n;i++){const same=[],other=[];for(let j=0;j<n;j++){if(i===j)continue;
+    const d=Math.hypot(scores[i][0]-scores[j][0],scores[i][1]-scores[j][1]);
+    (labels[j]===labels[i]?same:other).push(d);}
+    if(!same.length||!other.length)continue;const a=mean(same),b=mean(other);
+    tot+=(b-a)/Math.max(a,b);cnt++;}return cnt?tot/cnt:NaN;}
+
+/* ---- run ---- */
+$("#runPCA").onclick=async()=>{
+  $("#runPCA").disabled=true;
+  let mat=await buildMatrix();
+  if(!mat){$("#runPCA").disabled=false;return;}
+  if($("#aggMode").value==="indiv")mat=aggregate(mat);
+  const pr=prep(mat);
+  if(pr.names.length<2){$("#pcaStat").textContent="need ≥2 usable features (more birds/regions)";$("#runPCA").disabled=false;return;}
+  const P=pca(pr.X);
+  LAST={mat,pr,pca:P};
+  $("#pcaStat").textContent=`${pr.rows.length} points · ${pr.names.length} features`;
+  $("#pcaEV").textContent=`PC1 ${P.evr[0].toFixed(1)}%  ·  PC2 ${P.evr[1].toFixed(1)}%  explained`;
+  drawPCA();computeStats();refreshExportState();
+  if(MAP)populateMapColBy();
+  $("#runPCA").disabled=false;
+};
+$("#colBy").onchange=drawPCA;$("#hullMode").onchange=drawPCA;
+$("#aggMode").onchange=()=>{if(LAST)$("#runPCA").click();};
+
+function groupColor(label,indiv,colBy){
+  if(colBy==="species")return label==="A"?"#e0894f":"#5f9fd6";
+  // individual: hash to hue, tint by species
+  let h=0;for(const c of indiv)h=(h*31+c.charCodeAt(0))%360;
+  return `hsl(${h},60%,60%)`;
+}
+function drawPCA(){if(!LAST)return;const cv=$("#pca"),ctx=cv.getContext("2d");
+  const W=cv.width,H=cv.height,pad=36;ctx.clearRect(0,0,W,H);ctx.fillStyle="#0d0c0a";ctx.fillRect(0,0,W,H);
+  const S=LAST.pca.scores,rows=LAST.pr.rows,colBy=$("#colBy").value;
+  const xs=S.map(s=>s[0]),ys=S.map(s=>s[1]);
+  const xmin=Math.min(...xs),xmax=Math.max(...xs),ymin=Math.min(...ys),ymax=Math.max(...ys);
+  const sx=v=>pad+(v-xmin)/(xmax-xmin+EPS)*(W-2*pad);
+  const sy=v=>H-pad-(v-ymin)/(ymax-ymin+EPS)*(H-2*pad);
+  // axes
+  ctx.strokeStyle="#33302a";ctx.lineWidth=1;ctx.beginPath();
+  ctx.moveTo(pad,H-pad);ctx.lineTo(W-pad,H-pad);ctx.moveTo(pad,pad);ctx.lineTo(pad,H-pad);ctx.stroke();
+  ctx.fillStyle="#9c9484";ctx.font="11px monospace";ctx.fillText("PC1",W-pad-24,H-pad+14);ctx.fillText("PC2",pad-2,pad-8);
+  // hulls
+  const hm=$("#hullMode").value;
+  if(hm!=="none"){const gm={};rows.forEach((r,i)=>{const key=hm==="species"?r.label:r.indiv;
+    (gm[key]=gm[key]||[]).push([sx(S[i][0]),sy(S[i][1]),r.label]);});
+    Object.entries(gm).forEach(([key,pts])=>{if(pts.length<3)return;const hull=convHull(pts);
+      ctx.beginPath();hull.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();
+      const col=hm==="species"?(key==="A"?"224,137,79":"95,159,214"):"120,183,172";
+      ctx.fillStyle=`rgba(${col},0.08)`;ctx.strokeStyle=`rgba(${col},0.5)`;ctx.lineWidth=1;ctx.fill();ctx.stroke();});}
+  // points
+  rows.forEach((r,i)=>{ctx.beginPath();ctx.arc(sx(S[i][0]),sy(S[i][1]),4.5,0,7);
+    ctx.fillStyle=groupColor(r.label,r.indiv,colBy);ctx.fill();
+    ctx.strokeStyle=r.label==="A"?"#e0894f":"#5f9fd6";ctx.lineWidth=1.5;ctx.stroke();});
+  LAST._map={sx,sy,S};
+  // legend
+  const a=STATE.taxa.A?STATE.taxa.A.name:"A",b=STATE.taxa.B?STATE.taxa.B.name:"B";
+  $("#pcaLegend").innerHTML=`<span><span class="sw" style="background:#e0894f"></span>${a}</span>
+    <span><span class="sw" style="background:#5f9fd6"></span>${b}</span>
+    <span class="mut small">ring = species; fill = ${colBy}</span>`;
+}
+$("#pca").addEventListener("click",e=>{if(!LAST||!LAST._map)return;const cv=$("#pca");
+  const rect=cv.getBoundingClientRect();const mxp=(e.clientX-rect.left)*cv.width/rect.width,myp=(e.clientY-rect.top)*cv.height/rect.height;
+  const {sx,sy,S}=LAST._map;let best=-1,bd=1e9;
+  S.forEach((s,i)=>{const d=Math.hypot(sx(s[0])-mxp,sy(s[1])-myp);if(d<bd){bd=d;best=i;}});
+  if(best<0||bd>20)return;const r=LAST.pr.rows[best];
+  $("#pcaPick").innerHTML=`<span class="pill p${r.label}">${r.label}</span> #${r.bird.assetId}
+    · ${r.bird.meta.countryName||""} · indiv ${r.indiv}
+    <a href="https://macaulaylibrary.org/asset/${r.bird.assetId}" target="_blank" style="color:var(--acc)"> ↗</a>
+    <br><img src="/img/${r.bird.assetId}/320" style="max-width:220px;border-radius:8px;margin-top:6px">`;});
+function convHull(pts){const p=[...pts].sort((a,b)=>a[0]-b[0]||a[1]-b[1]);const n=p.length;if(n<3)return p;
+  const cross=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+  const lo=[];for(const q of p){while(lo.length>=2&&cross(lo[lo.length-2],lo[lo.length-1],q)<=0)lo.pop();lo.push(q);}
+  const up=[];for(let i=n-1;i>=0;i--){const q=p[i];while(up.length>=2&&cross(up[up.length-2],up[up.length-1],q)<=0)up.pop();up.push(q);}
+  return lo.slice(0,-1).concat(up.slice(0,-1));}
+
+function computeStats(){if(!LAST)return;const {pr,mat}=LAST,rows=pr.rows;
+  const A=rows.filter(r=>r.label==="A"),B=rows.filter(r=>r.label==="B");
+  // BETWEEN
+  let bt="";
+  if(B.length>=2){const scored=pr.names.map((nm,j)=>{
+      const xa=A.map(r=>r.vec[pr.keepIdx[j]]),xb=B.map(r=>r.vec[pr.keepIdx[j]]);
+      return {nm,d:cohenD(xa,xb),auc:auc(xa,xb)};}).filter(s=>!isNaN(s.d)).sort((a,b)=>Math.abs(b.d)-Math.abs(a.d));
+    const sil=silhouette(LAST.pca.scores,rows.map(r=>r.label));
+    const km=kmeansAcc(LAST.pca.scores,rows.map(r=>r.label));
+    bt=`<div class="row" style="gap:18px;margin-bottom:8px">
+      <span>silhouette <b>${sil.toFixed(3)}</b></span>
+      <span>2-means vs species <b>${(km*100).toFixed(0)}%</b></span></div>
+      <table><tr><th>feature</th><th>Cohen d</th><th>AUC</th></tr>
+      ${scored.slice(0,12).map(s=>`<tr><td>${s.nm}</td><td>${s.d.toFixed(2)}</td><td>${s.auc.toFixed(2)}</td></tr>`).join("")}</table>
+      <p class="hint">|d|: 0.2 small · 0.5 medium · 0.8 large. AUC 0.5 = no separation.</p>`;
+  } else bt=`<span class="mut">add a species B to compare between species.</span>`;
+  $("#betweenBox").innerHTML=bt;
+  // WITHIN: ICC per feature within each species (pooled by using indiv groups)
+  const withSpecies=lab=>{const rs=rows.filter(r=>r.label===lab);
+    const groups=rs.map(r=>r.indiv);const nGroups=new Set(groups).size;
+    const withRep=Object.values(count(groups)).filter(c=>c>=2).length;
+    if(withRep<1)return null;
+    const scored=pr.names.map((nm,j)=>({nm,icc:icc1(rs.map(r=>r.vec[pr.keepIdx[j]]),groups)}))
+      .filter(s=>!isNaN(s.icc)).sort((a,b)=>b.icc-a.icc);
+    return {nGroups,withRep,scored};};
+  let wt="";["A","B"].forEach(lab=>{if(!rows.some(r=>r.label===lab))return;const w=withSpecies(lab);
+    const nm=lab==="A"?(STATE.taxa.A?STATE.taxa.A.name:"A"):(STATE.taxa.B?STATE.taxa.B.name:"B");
+    if(!w){wt+=`<div style="margin-bottom:8px"><span class="pill p${lab}">${lab}</span> ${nm}: no individuals with ≥2 photos.</div>`;return;}
+    wt+=`<div style="margin-bottom:10px"><span class="pill p${lab}">${lab}</span> <b>${nm}</b>
+      — ${w.withRep} individuals with repeats
+      <table style="margin-top:4px"><tr><th>feature</th><th>ICC</th></tr>
+      ${w.scored.slice(0,8).map(s=>`<tr><td>${s.nm}</td><td>${s.icc.toFixed(2)}</td></tr>`).join("")}</table></div>`;});
+  wt+=`<p class="hint">ICC≈1: value is a stable trait of the bird (repeatable across its photos).
+    ICC≈0: dominated by photo-to-photo noise — a weak feature. Use "per individual" aggregation to remove that noise from the between-species test.</p>`;
+  $("#withinBox").innerHTML=wt;
+}
+function count(a){const c={};a.forEach(x=>c[x]=(c[x]||0)+1);return c;}
+function kmeansAcc(scores,labels){ // 2-means on PC space, best-match accuracy vs A/B
+  if(new Set(labels).size<2)return NaN;
+  let c0=scores[0],c1=scores.find((s,i)=>labels[i]!==labels[0])||scores[1];
+  let assign=scores.map(()=>0);
+  for(let it=0;it<25;it++){assign=scores.map(s=>dist2(s,c0)<=dist2(s,c1)?0:1);
+    const g0=scores.filter((_,i)=>assign[i]===0),g1=scores.filter((_,i)=>assign[i]===1);
+    if(g0.length)c0=[mean(g0.map(s=>s[0])),mean(g0.map(s=>s[1]))];
+    if(g1.length)c1=[mean(g1.map(s=>s[0])),mean(g1.map(s=>s[1]))];}
+  const match=f=>scores.filter((_,i)=>(assign[i]===0?"A":"B")===(f?labels[i]:flip(labels[i]))).length;
+  const acc=Math.max(match(true),match(false))/scores.length;return acc;}
+function flip(l){return l==="A"?"B":"A";}
+function dist2(a,b){return (a[0]-b[0])**2+(a[1]-b[1])**2;}
+
+/* ============================================================ EXPORT */
+function refreshExportState(){const on=!!LAST;["#expMatrix","#expPNG"].forEach(s=>$(s).disabled=!on);}
+$("#expMatrix").onclick=()=>{if(!LAST)return;const {mat}=LAST;
+  const hdr=["assetId","species","indiv"].concat(mat.names);
+  const lines=[hdr.join(",")];mat.rows.forEach(r=>{
+    lines.push([r.bird?r.bird.assetId:r.indiv,r.label,r.indiv].concat(r.vec.map(v=>isNaN(v)?"":v.toFixed(5))).join(","));});
+  dl(lines.join("\n"),"feature_matrix.csv","text/csv");};
+$("#expAnn").onclick=()=>{dl(JSON.stringify({taxa:STATE.taxa,featureset:STATE.featureset,ann:STATE.ann},null,0),"annotations.json","application/json");};
+$("#expPNG").onclick=()=>{if(!LAST)return;$("#pca").toBlob(b=>{const u=URL.createObjectURL(b);
+  const a=ce("a");a.href=u;a.download="pca.png";a.click();URL.revokeObjectURL(u);});};
+function dl(text,name,type){const b=new Blob([text],{type});const u=URL.createObjectURL(b);
+  const a=ce("a");a.href=u;a.download=name;a.click();URL.revokeObjectURL(u);}
+
+$("#resetAll").onclick=()=>{if(!confirm("Clear workset, annotations and feature set?"))return;
+  STATE={workset:[],taxa:{A:null,B:null},featureset:{regions:[],measures:["L","a","b","chroma"],contrasts:[]},ann:{}};
+  save();location.reload();};
+
+/* ============================================================ MAP */
+let MAP=null,MAPLAYER=null;
+function startMap(){
+  const stat=$("#mapStat");
+  if(typeof L==="undefined"){stat.innerHTML='<span style="color:var(--bad)">map library not loaded (offline?) — points can\'t be drawn</span>';return;}
+  if(!MAP){MAP=L.map("map",{worldCopyJump:true}).setView([25,20],2);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {maxZoom:12,attribution:"© OpenStreetMap"}).addTo(MAP);
+    MAPLAYER=L.layerGroup().addTo(MAP);}
+  setTimeout(()=>MAP.invalidateSize(),120);
+  populateMapColBy();renderMap();
+}
+function populateMapColBy(){const sel=$("#mapColBy"),prev=sel.value;
+  let opts='<option value="species">species</option>';
+  if(LAST){opts+='<option value="PC1">PC1</option><option value="PC2">PC2</option>';
+    LAST.pr.names.forEach(nm=>opts+=`<option value="feat:${nm}">${nm}</option>`);}
+  sel.innerHTML=opts;if([...sel.options].some(o=>o.value===prev))sel.value=prev;}
+$("#mapColBy").onchange=renderMap;$("#mapWhich").onchange=renderMap;
+$("#mapFit").onclick=()=>{if(MAP&&MAP._fitB)MAP.fitBounds(MAP._fitB,{padding:[30,30]});};
+function valueByAsset(mode){const map={};if(!LAST)return map;
+  LAST.pr.rows.forEach((r,i)=>{if(!r.bird)return;let v;
+    if(mode==="PC1")v=LAST.pca.scores[i][0];
+    else if(mode==="PC2")v=LAST.pca.scores[i][1];
+    else{const nm=mode.slice(5),j=LAST.mat.names.indexOf(nm);v=j>=0?r.vec[j]:NaN;}
+    if(v!=null&&!isNaN(v))map[r.bird.assetId]=v;});return map;}
+function scaleColor(t){const L1=(a,b,u)=>a+(b-a)*u;
+  const blue=[95,159,214],grey=[120,116,110],orange=[224,137,79];let c;
+  if(t<0.5){const u=t/0.5;c=[L1(blue[0],grey[0],u),L1(blue[1],grey[1],u),L1(blue[2],grey[2],u)];}
+  else{const u=(t-0.5)/0.5;c=[L1(grey[0],orange[0],u),L1(grey[1],orange[1],u),L1(grey[2],orange[2],u)];}
+  return `rgb(${c.map(Math.round).join(",")})`;}
+function renderMap(){if(!MAP)return;MAPLAYER.clearLayers();
+  const colBy=$("#mapColBy").value,which=$("#mapWhich").value;
+  let birds=STATE.workset.slice();
+  if(which==="annot")birds=birds.filter(b=>{const r=STATE.ann[b.assetId];return r&&hasInk(r)&&!r.excl;});
+  const withCoord=birds.filter(b=>b.meta&&isFinite(b.meta.latitude)&&isFinite(b.meta.longitude));
+  let vmap={},vmin=0,vmax=1;
+  if(colBy!=="species"){vmap=valueByAsset(colBy);const vs=Object.values(vmap);
+    if(vs.length){vmin=Math.min(...vs);vmax=Math.max(...vs);}}
+  const pts=[];let coloured=0;
+  withCoord.forEach(b=>{const lat=+b.meta.latitude,lon=+b.meta.longitude;pts.push([lat,lon]);
+    let color,val=null;
+    if(colBy==="species")color=b.sp==="A"?"#e0894f":"#5f9fd6";
+    else if(b.assetId in vmap){val=vmap[b.assetId];const t=(val-vmin)/((vmax-vmin)||1);color=scaleColor(t);coloured++;}
+    else color="#4a463f";
+    const mk=L.circleMarker([lat,lon],{radius:6,color:"#14130f",weight:1,
+      fillColor:color,fillOpacity:0.9});
+    mk.bindPopup(`<div style="font-family:sans-serif">
+      <b>#${b.assetId}</b> <span style="color:${b.sp==="A"?"#c56a2f":"#3f7fbf"}">${b.sp} · ${b.spName}</span>
+      ${val!=null?`<br><b>${colBy}</b>: ${val.toFixed(3)}`:""}
+      <br>${metaLine(b)||""}
+      <br><img src="/img/${b.assetId}/320" style="max-width:200px;border-radius:6px;margin-top:4px"></div>`);
+    MAPLAYER.addLayer(mk);});
+  if(pts.length){MAP._fitB=L.latLngBounds(pts);}
+  const total=withCoord.length,missing=birds.length-total;
+  $("#mapStat").innerHTML=`${total} points${missing?` · ${missing} without coordinates`:""}`+
+    (colBy!=="species"?` · ${coloured} coloured by value`:"");
+  // scale legend
+  const sb=$("#mapScale");
+  if(colBy==="species"){sb.style.display="none";}
+  else{sb.style.display="block";
+    $("#mapScaleBody").innerHTML=`<div class="row"><span class="mono small">${vmin.toFixed(2)}</span>
+      <span style="display:inline-block;width:220px;height:14px;border-radius:7px;
+        background:linear-gradient(90deg,#5f9fd6,#78746e,#e0894f)"></span>
+      <span class="mono small">${vmax.toFixed(2)}</span>
+      <span class="mut small">— ${colBy}</span></div>
+      <p class="hint" style="margin:6px 0 0">Grey markers = value not available (not annotated${$("#aggMode").value==="indiv"?", or aggregated away":""}).</p>`;}
+}
+
+/* ============================================================ INIT */
+function restoreUI(){
+  renderMetaPick();
+  if(STATE.taxa.A){$("#qA").value=STATE.taxa.A.name;$("#pickA").textContent=`✓ ${STATE.taxa.A.name} — ${STATE.taxa.A.sci} (${STATE.taxa.A.code})`;}
+  if(STATE.taxa.B){$("#qB").value=STATE.taxa.B.name;$("#pickB").textContent=`✓ ${STATE.taxa.B.name} — ${STATE.taxa.B.sci} (${STATE.taxa.B.code})`;}
+  if(STATE.workset.length)renderWorkset();
+  refreshExportState();updateHdr();
+}
+restoreUI();
+</script></body></html>
