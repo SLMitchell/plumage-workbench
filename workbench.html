@@ -1166,11 +1166,12 @@ function valueByAsset(mode){const map={};if(!LAST)return map;
     else if(mode==="PC2")v=LAST.pca.scores[i][1];
     else{const nm=mode.slice(5),j=LAST.mat.names.indexOf(nm);v=j>=0?r.vec[j]:NaN;}
     if(v!=null&&!isNaN(v))map[r.bird.assetId]=v;});return map;}
-function scaleColor(t){const L1=(a,b,u)=>a+(b-a)*u;
-  const blue=[95,159,214],grey=[120,116,110],orange=[224,137,79];let c;
-  if(t<0.5){const u=t/0.5;c=[L1(blue[0],grey[0],u),L1(blue[1],grey[1],u),L1(blue[2],grey[2],u)];}
-  else{const u=(t-0.5)/0.5;c=[L1(grey[0],orange[0],u),L1(grey[1],orange[1],u),L1(grey[2],orange[2],u)];}
-  return `rgb(${c.map(Math.round).join(",")})`;}
+const VIRIDIS=[[68,1,84],[72,40,120],[62,74,137],[49,104,142],[38,130,142],[31,158,137],
+  [53,183,121],[110,206,88],[181,222,43],[253,231,37]];
+function scaleColor(t){t=Math.max(0,Math.min(1,isNaN(t)?0:t));const n=VIRIDIS.length-1,x=t*n;
+  const i=Math.min(n-1,Math.floor(x)),u=x-i,a=VIRIDIS[i],b=VIRIDIS[i+1];
+  return `rgb(${Math.round(a[0]+(b[0]-a[0])*u)},${Math.round(a[1]+(b[1]-a[1])*u)},${Math.round(a[2]+(b[2]-a[2])*u)})`;}
+const VIRIDIS_CSS="linear-gradient(90deg,rgb(68,1,84),rgb(49,104,142),rgb(31,158,137),rgb(110,206,88),rgb(253,231,37))";
 function renderMap(){if(!MAP)return;MAPLAYER.clearLayers();
   const colBy=$("#mapColBy").value,which=$("#mapWhich").value;
   let birds=STATE.workset.slice();
@@ -1185,8 +1186,10 @@ function renderMap(){if(!MAP)return;MAPLAYER.clearLayers();
     if(colBy==="species")color=b.sp==="A"?"#e0894f":"#5f9fd6";
     else if(b.assetId in vmap){val=vmap[b.assetId];const t=(val-vmin)/((vmax-vmin)||1);color=scaleColor(t);coloured++;}
     else color="#4a463f";
-    const mk=L.circleMarker([lat,lon],{radius:6,color:"#14130f",weight:1,
-      fillColor:color,fillOpacity:0.9});
+    // in score mode, keep species readable via the ring colour
+    const stroke=colBy==="species"?"#14130f":(b.sp==="A"?"#e0894f":"#5f9fd6");
+    const mk=L.circleMarker([lat,lon],{radius:6,color:stroke,weight:colBy==="species"?1:2,
+      fillColor:color,fillOpacity:0.92});
     mk.bindPopup(`<div style="font-family:sans-serif">
       <b>#${b.assetId}</b> <span style="color:${b.sp==="A"?"#c56a2f":"#3f7fbf"}">${b.sp} · ${b.spName}</span>
       ${val!=null?`<br><b>${colBy}</b>: ${val.toFixed(3)}`:""}
@@ -1202,11 +1205,12 @@ function renderMap(){if(!MAP)return;MAPLAYER.clearLayers();
   if(colBy==="species"){sb.style.display="none";}
   else{sb.style.display="block";
     $("#mapScaleBody").innerHTML=`<div class="row"><span class="mono small">${vmin.toFixed(2)}</span>
-      <span style="display:inline-block;width:220px;height:14px;border-radius:7px;
-        background:linear-gradient(90deg,#5f9fd6,#78746e,#e0894f)"></span>
+      <span style="display:inline-block;width:220px;height:14px;border-radius:7px;background:${VIRIDIS_CSS}"></span>
       <span class="mono small">${vmax.toFixed(2)}</span>
-      <span class="mut small">— ${colBy}</span></div>
-      <p class="hint" style="margin:6px 0 0">Grey markers = value not available (not annotated${$("#aggMode").value==="indiv"?", or aggregated away":""}).</p>`;}
+      <span class="mut small">— ${colBy} (viridis)</span></div>
+      <p class="hint" style="margin:6px 0 0">Fill = ${colBy} (viridis, low→high). Ring colour = species
+      (<span style="color:var(--A)">A</span>/<span style="color:var(--B)">B</span>).
+      Grey markers = value not available (not annotated${$("#aggMode").value==="indiv"?", or aggregated away":""}).</p>`;}
 }
 
 /* ============================================================ INIT */
