@@ -340,7 +340,7 @@ async function checkBackend(){
 async function checkMacaulay(announce){
   banner("checking connection to the Macaulay Library &amp; eBird…","warn");
   let s;
-  try{const r=await withTimeout("/api/status",25000);
+  try{const r=await withTimeout("/api/status",35000);
     if(r.status===404){clearBanner();return true;}   // build without the probe — stay quiet
     s=await r.json();}
   catch(e){banner('⚠ Connection check timed out — the Macaulay Library may be slow or '+

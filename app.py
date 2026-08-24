@@ -67,6 +67,20 @@ _last_search = [0.0]          # simple politeness throttle for ML search
 _img_cache = {}
 _img_lock = threading.Lock()
 
+
+def _warm_ml():
+    """Solve the Macaulay Anubis challenge once at boot so the first real pull
+    (and the status probe) doesn't pay the handshake cost."""
+    try:
+        with _ml_lock:
+            _ml.get_json(SEARCH, {"taxonCode": "rutshr2", "mediaType": "photo",
+                                  "count": 1}, timeout=25)
+    except Exception:
+        pass
+
+
+threading.Thread(target=_warm_ml, daemon=True).start()
+
 KEEP = ["assetId", "speciesCode", "comName", "sciName", "ageClass",
         "rating", "ratingCount", "width", "height",
         "obsDt", "obsYear", "obsMonth", "obsDay", "obsTime",
@@ -174,7 +188,7 @@ def api_status():
     try:
         with _ml_lock:
             j = _ml.get_json(SEARCH, {"taxonCode": "rutshr2",
-                                      "mediaType": "photo", "count": 1})
+                                      "mediaType": "photo", "count": 1}, timeout=12)
         out["macaulay"] = isinstance(j, list)
     except Exception as e:
         out["macaulay"], out["macaulay_err"] = False, str(e)[:150]

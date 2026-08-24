@@ -67,9 +67,9 @@ class MLClient:
                     "redir": BASE + "/", "elapsedTime": elapsed},
             timeout=60, allow_redirects=True)
 
-    def get_json(self, url, params=None, tries=2):
+    def get_json(self, url, params=None, tries=3, timeout=60):
         for attempt in range(tries):
-            r = self.s.get(url, params=params, timeout=60)
+            r = self.s.get(url, params=params, timeout=timeout)
             ctype = r.headers.get("content-type", "")
             if "application/json" in ctype or (r.text[:1] in "[{"):
                 try:
