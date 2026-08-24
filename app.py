@@ -167,7 +167,7 @@ def api_status():
     out = {}
     try:
         r = _sess.get(EBIRD_FIND, params={"locale": "en", "cat": "species",
-                      "limit": 1, "q": "robin", "key": EBIRD_KEY}, timeout=10)
+                      "limit": 1, "q": "robin", "key": EBIRD_KEY}, timeout=6)
         out["ebird"] = (r.status_code == 200)
     except Exception as e:
         out["ebird"], out["ebird_err"] = False, str(e)[:150]
@@ -179,7 +179,7 @@ def api_status():
     except Exception as e:
         out["macaulay"], out["macaulay_err"] = False, str(e)[:150]
     try:
-        r = _sess.get(CDN.format(aid="237720701", size=320), timeout=10)
+        r = _sess.get(CDN.format(aid="237720701", size=320), timeout=6)
         out["cdn"] = (r.status_code == 200)
     except Exception as e:
         out["cdn"], out["cdn_err"] = False, str(e)[:150]

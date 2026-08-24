@@ -314,22 +314,39 @@ const ce=(t,c)=>{const e=document.createElement(t);if(c)e.className=c;return e;}
 function banner(msg,kind){$("#bannerMsg").innerHTML=msg;const b=$("#banner");
   b.className="banner "+(kind||"warn");b.style.display="flex";}
 function clearBanner(){$("#banner").style.display="none";}
-async function checkConnectivity(announce){
+function wireRetry(){const rc=$("#retryConn");if(rc)rc.onclick=e=>{e.preventDefault();checkMacaulay(true);};}
+function withTimeout(url,ms){const c=new AbortController();const t=setTimeout(()=>c.abort(),ms);
+  return fetch(url,{signal:c.signal}).finally(()=>clearTimeout(t));}
+
+// Light check on load: is OUR backend alive? (fast, no upstream calls)
+async function checkBackend(){
+  try{const r=await withTimeout("/healthz",8000);
+    if(r.ok){clearBanner();return true;}
+    banner("⚠ The app's backend returned an error ("+r.status+"). Try reloading.","bad");return false;}
+  catch(e){banner('⚠ The app can\'t reach its backend right now — it may be starting up or '+
+    'redeploying. <a href="#" id="retryConn">retry</a>',"bad");
+    const rc=$("#retryConn");if(rc)rc.onclick=ev=>{ev.preventDefault();
+      banner("checking…","warn");checkBackend();};return false;}
+}
+
+// Deep check (Test connection button, or a retry link): probe Macaulay + eBird.
+// This can take a few seconds (it solves the Macaulay challenge), so it's on demand.
+async function checkMacaulay(announce){
+  banner("checking connection to the Macaulay Library &amp; eBird…","warn");
   let s;
-  try{const r=await fetch("/api/status");
-    if(r.status===404)return true;              // probe not available (e.g. local prototype) — stay quiet
+  try{const r=await withTimeout("/api/status",25000);
+    if(r.status===404){clearBanner();return true;}   // build without the probe — stay quiet
     s=await r.json();}
-  catch(e){banner("⚠ The app can't reach its own backend — nothing will load. "+e,"bad");return false;}
-  if(s&&s.ok){if(announce){banner("✓ Connected to Macaulay Library &amp; eBird.","okmsg");
+  catch(e){banner('⚠ Connection check timed out — the Macaulay Library may be slow or '+
+    'unreachable just now. Pulling images may still work. <a href="#" id="retryConn">retry</a>',"bad");
+    wireRetry();return false;}
+  if(s&&s.ok){if(announce){banner("✓ Connected to the Macaulay Library &amp; eBird.","okmsg");
       setTimeout(clearBanner,2500);}else clearBanner();return true;}
   const down=[];if(s){if(!s.ebird)down.push("eBird (species lookup)");
     if(!s.macaulay)down.push("Macaulay search");if(!s.cdn)down.push("Macaulay image server");}
-  banner(`⚠ Can't reach ${down.join(", ")||"Macaulay Library"} right now — `+
-    `species lookup, image pulls or photos may fail. `+
-    `<a href="#" id="retryConn">retry</a>`,"bad");
-  const rc=$("#retryConn");if(rc)rc.onclick=e=>{e.preventDefault();
-    banner("checking connection…","warn");checkConnectivity(true);};
-  return false;
+  banner("⚠ Can't reach "+(down.join(", ")||"the Macaulay Library")+" right now — "+
+    'species lookup, image pulls or photos may fail. <a href="#" id="retryConn">retry</a>',"bad");
+  wireRetry();return false;
 }
 
 /* ============================================================ STATE */
@@ -377,7 +394,7 @@ function wireAC(inputId,boxId,slot){
       items=await r.json().catch(()=>[]);
       if(!Array.isArray(items)){banner("⚠ Species lookup failed (eBird unreachable): "+
         (items&&items.error||"")+' <a href="#" id="retryConn">retry</a>',"bad");
-        const rc=$("#retryConn");if(rc)rc.onclick=e=>{e.preventDefault();checkConnectivity(true);};
+        const rc=$("#retryConn");if(rc)rc.onclick=e=>{e.preventDefault();checkMacaulay(true);};
         items=[];}
     }catch(e){banner("⚠ Couldn't reach the server for species lookup: "+e,"bad");items=[];}
     box.innerHTML="";sel=-1;
@@ -417,7 +434,7 @@ $("#pull").onclick=async()=>{
         banner(`⚠ Couldn't pull ${tx.name} from the Macaulay Library: `+
           `${j.error||("HTTP "+r.status)}. `+
           `<a href="#" id="retryConn">check connection</a>`,"bad");
-        const rc=$("#retryConn");if(rc)rc.onclick=e=>{e.preventDefault();checkConnectivity(true);};
+        const rc=$("#retryConn");if(rc)rc.onclick=e=>{e.preventDefault();checkMacaulay(true);};
         st.textContent="pull failed";continue;}
       j.assets.forEach(it=>set.push({
         assetId:it.assetId,sp:slot,spName:tx.name,taxon:tx.code,
@@ -1007,8 +1024,8 @@ function renderMap(){if(!MAP)return;MAPLAYER.clearLayers();
 function restoreUI(){
   renderMetaPick();
   $("#bannerX").onclick=clearBanner;
-  $("#testConn").onclick=()=>{banner("checking connection…","warn");checkConnectivity(true);};
-  checkConnectivity();
+  $("#testConn").onclick=()=>checkMacaulay(true);
+  checkBackend();
   if(STATE.taxa.A){$("#qA").value=STATE.taxa.A.name;$("#pickA").textContent=`✓ ${STATE.taxa.A.name} — ${STATE.taxa.A.sci} (${STATE.taxa.A.code})`;}
   if(STATE.taxa.B){$("#qB").value=STATE.taxa.B.name;$("#pickB").textContent=`✓ ${STATE.taxa.B.name} — ${STATE.taxa.B.sci} (${STATE.taxa.B.code})`;}
   if(STATE.workset.length)renderWorkset();
