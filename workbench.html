@@ -229,6 +229,7 @@ canvas.paint{position:absolute;inset:0;width:100%;height:100%;cursor:none;touch-
         </div>
         <label class="small">Paint region</label>
         <div id="aRegBtns" style="margin:6px 0"></div>
+        <div id="aDarkBox" style="margin:6px 0"></div>
         <div class="row" style="margin:6px 0">
           <label class="small">Brush</label>
           <input id="aBrush" type="range" min="1" max="90" value="22" style="width:120px">
@@ -722,7 +723,25 @@ function startAnnotate(){
 function renderRegBtns(){const box=$("#aRegBtns");box.innerHTML="";
   fs().regions.forEach((r,i)=>{const b=ce("button","regbtn"+(r.id===paintReg?" on":""));
     b.innerHTML=`<span class="sw" style="background:${r.color}"></span>${i+1}. ${r.name}`;
-    b.onclick=()=>{paintReg=r.id;renderRegBtns();redraw();};box.appendChild(b);});}
+    b.onclick=()=>{paintReg=r.id;renderRegBtns();redraw();};box.appendChild(b);});
+  renderDarkControl();}
+function renderDarkControl(){const box=$("#aDarkBox");if(!box)return;
+  const r=fs().regions.find(x=>x.id===paintReg);
+  if(!r){box.innerHTML="";return;}
+  const on=r.darkCut!=null,v=on?r.darkCut:25;
+  box.innerHTML=`<label class="small" style="display:flex;gap:6px;align-items:center">
+      <input type="checkbox" id="aDarkOn" ${on?"checked":""}> exclude dark from <b>${r.name}</b>
+      <span class="mut">(e.g. pupil → iris)</span></label>
+    <div class="row" id="aDarkRow" style="margin-top:5px;${on?"":"opacity:.4;pointer-events:none"}">
+      <span class="small mut">keep&nbsp;L*≥</span>
+      <input type="range" id="aDarkSl" min="0" max="60" step="1" value="${v}" style="width:118px">
+      <span class="mono small" id="aDarkV" style="min-width:20px">${v}</span>
+      <span class="small"><span class="sw" style="background:#eb2d2d"></span> excluded</span></div>`;
+  const rr=()=>fs().regions.find(x=>x.id===paintReg);
+  $("#aDarkOn").onchange=e=>{const g=rr();if(e.target.checked)g.darkCut=+$("#aDarkSl").value||25;else delete g.darkCut;
+    save();renderDarkControl();redraw();liveMeasure();};
+  const sl=$("#aDarkSl");if(sl)sl.oninput=()=>{const g=rr();if(g.darkCut==null)return;
+    g.darkCut=+sl.value;$("#aDarkV").textContent=sl.value;save();redraw();liveMeasure();};}
 function loadBird(){const b=curBird();
   procCache={}; // free memory of previous
   aimg.onload=()=>{IW=aimg.naturalWidth;IH=aimg.naturalHeight;
@@ -743,10 +762,17 @@ function loadBird(){const b=curBird();
 }
 function getStrokes(regId){const r=annRec(curBird());if(!r.strokes[regId])r.strokes[regId]=[];return r.strokes[regId];}
 function drawMaskOverlay(){const W=acv.width,H=acv.height;actx.clearRect(0,0,W,H);
-  fs().regions.forEach(r=>{const strokes=getStrokes(r.id);const m=strokesMask(strokes,W,H);if(!m)return;
-    const img=actx.createImageData(W,H),col=hexRGB(r.color);const alpha=r.id===paintReg?150:70;
-    for(let i=0;i<W*H;i++)if(m[i]){img.data[i*4]=col[0];img.data[i*4+1]=col[1];img.data[i*4+2]=col[2];img.data[i*4+3]=alpha;}
-    actx.putImageData(img,0,0);});}
+  // one composited buffer (later writes win; active region drawn last so it sits on top)
+  const A=fs().regions.some(r=>r.darkCut!=null)?getProc():null;
+  const buf=actx.createImageData(W,H),d=buf.data;
+  const ordered=fs().regions.slice().sort((a,b)=>(a.id===paintReg)-(b.id===paintReg));
+  ordered.forEach(r=>{const m=strokesMask(getStrokes(r.id),W,H);if(!m)return;
+    const col=hexRGB(r.color),active=r.id===paintReg,alpha=active?150:70;
+    const cut=(r.darkCut==null)?null:+r.darkCut,L=(cut!=null&&A)?A.L:null;
+    for(let i=0;i<W*H;i++)if(m[i]){const j=i*4;
+      if(L&&L[i]<cut){d[j]=235;d[j+1]=45;d[j+2]=45;d[j+3]=active?190:95;}   // excluded (pupil/shadow)
+      else{d[j]=col[0];d[j+1]=col[1];d[j+2]=col[2];d[j+3]=alpha;}}});
+  actx.putImageData(buf,0,0);}
 function hexRGB(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
 function replayAndDraw(){drawMaskOverlay();drawCursor();}
 function redraw(){replayAndDraw();}
