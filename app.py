@@ -140,14 +140,51 @@ def api_taxon():
     term = (request.args.get("q", "") or "").strip()
     if len(term) < 2:
         return jsonify([])
-    r = _sess.get(EBIRD_FIND, params={"locale": "en", "cat": "species",
-                  "limit": 12, "q": term, "key": EBIRD_KEY}, timeout=30)
+    try:
+        r = _sess.get(EBIRD_FIND, params={"locale": "en", "cat": "species",
+                      "limit": 12, "q": term, "key": EBIRD_KEY}, timeout=15)
+    except Exception as e:
+        return jsonify({"error": "eBird unreachable: " + str(e)[:150]}), 502
     data = r.json() if r.text.strip().startswith("[") else []
     out = []
     for d in data:
         nm = d.get("name", "")
         com, _, sci = nm.partition(" - ")
         out.append({"code": d.get("code"), "name": com or nm, "sci": sci})
+    return jsonify(out)
+
+
+# Lightweight connectivity probe for eBird / Macaulay search / image CDN.
+# Cached briefly so page loads don't hammer the upstreams.
+_status_cache = [0.0, None]
+
+
+@app.route("/api/status")
+def api_status():
+    now = time.time()
+    if _status_cache[1] is not None and now - _status_cache[0] < 60:
+        return jsonify(_status_cache[1])
+    out = {}
+    try:
+        r = _sess.get(EBIRD_FIND, params={"locale": "en", "cat": "species",
+                      "limit": 1, "q": "robin", "key": EBIRD_KEY}, timeout=10)
+        out["ebird"] = (r.status_code == 200)
+    except Exception as e:
+        out["ebird"], out["ebird_err"] = False, str(e)[:150]
+    try:
+        with _ml_lock:
+            j = _ml.get_json(SEARCH, {"taxonCode": "rutshr2",
+                                      "mediaType": "photo", "count": 1})
+        out["macaulay"] = isinstance(j, list)
+    except Exception as e:
+        out["macaulay"], out["macaulay_err"] = False, str(e)[:150]
+    try:
+        r = _sess.get(CDN.format(aid="237720701", size=320), timeout=10)
+        out["cdn"] = (r.status_code == 200)
+    except Exception as e:
+        out["cdn"], out["cdn_err"] = False, str(e)[:150]
+    out["ok"] = all(out.get(k) for k in ("ebird", "macaulay", "cdn"))
+    _status_cache[0], _status_cache[1] = now, out
     return jsonify(out)
 
 

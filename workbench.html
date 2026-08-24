@@ -80,6 +80,14 @@ canvas.paint{position:absolute;inset:0;width:100%;height:100%;cursor:none;touch-
 .tag.A{background:var(--A);color:#14130f} .tag.B{background:var(--B);color:#14130f}
 .small{font-size:12px}
 .warnbox{background:rgba(242,177,52,.1);border:1px solid var(--warn);border-radius:8px;padding:8px 12px;color:var(--warn);font-size:12.5px}
+.banner{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:12px;
+  padding:9px 16px;font-size:13px;font-weight:600;border-bottom:1px solid}
+.banner.warn{background:#3a2f12;color:#f2c85a;border-color:#6b5518}
+.banner.bad{background:#3a1815;color:#f0a099;border-color:#7a2c25}
+.banner.okmsg{background:#16302a;color:#7fd4c4;border-color:#245a4e}
+.banner #bannerMsg{flex:1}
+.banner button{background:transparent;border:0;color:inherit;cursor:pointer;font-size:15px;padding:0 4px}
+.banner a{color:inherit}
 </style></head><body>
 <header>
   <h1>🪶 Plumage Workbench</h1>
@@ -92,8 +100,10 @@ canvas.paint{position:absolute;inset:0;width:100%;height:100%;cursor:none;touch-
   </div>
   <span class="spacer"></span>
   <span class="hint" id="hdr"></span>
+  <button id="testConn" title="Check connection to Macaulay Library & eBird">Test connection</button>
   <button id="resetAll" title="Clear workset, annotations and feature set">Reset</button>
 </header>
+<div id="banner" class="banner" style="display:none"><span id="bannerMsg"></span><button id="bannerX" title="dismiss">✕</button></div>
 
 <!-- ============ QUERY ============ -->
 <div class="view on" id="v-query">
@@ -300,6 +310,28 @@ const REGCOLORS=["#f2b134","#3fa7d6","#b06fd6","#5fbf74","#e0894f","#e05f8a","#5
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const ce=(t,c)=>{const e=document.createElement(t);if(c)e.className=c;return e;};
 
+/* ---- warning banner + connectivity ---- */
+function banner(msg,kind){$("#bannerMsg").innerHTML=msg;const b=$("#banner");
+  b.className="banner "+(kind||"warn");b.style.display="flex";}
+function clearBanner(){$("#banner").style.display="none";}
+async function checkConnectivity(announce){
+  let s;
+  try{const r=await fetch("/api/status");
+    if(r.status===404)return true;              // probe not available (e.g. local prototype) — stay quiet
+    s=await r.json();}
+  catch(e){banner("⚠ The app can't reach its own backend — nothing will load. "+e,"bad");return false;}
+  if(s&&s.ok){if(announce){banner("✓ Connected to Macaulay Library &amp; eBird.","okmsg");
+      setTimeout(clearBanner,2500);}else clearBanner();return true;}
+  const down=[];if(s){if(!s.ebird)down.push("eBird (species lookup)");
+    if(!s.macaulay)down.push("Macaulay search");if(!s.cdn)down.push("Macaulay image server");}
+  banner(`⚠ Can't reach ${down.join(", ")||"Macaulay Library"} right now — `+
+    `species lookup, image pulls or photos may fail. `+
+    `<a href="#" id="retryConn">retry</a>`,"bad");
+  const rc=$("#retryConn");if(rc)rc.onclick=e=>{e.preventDefault();
+    banner("checking connection…","warn");checkConnectivity(true);};
+  return false;
+}
+
 /* ============================================================ STATE */
 const LS="plumage_workbench_v1";
 let STATE=load()||{
@@ -341,7 +373,13 @@ function wireAC(inputId,boxId,slot){
   const inp=$("#"+inputId),box=$("#"+boxId);let items=[],sel=-1,timer=null;
   inp.addEventListener("input",()=>{clearTimeout(timer);timer=setTimeout(async()=>{
     const q=inp.value.trim();if(q.length<2){box.style.display="none";return;}
-    const r=await fetch("/api/taxon?q="+encodeURIComponent(q));items=await r.json();
+    try{const r=await fetch("/api/taxon?q="+encodeURIComponent(q));
+      items=await r.json().catch(()=>[]);
+      if(!Array.isArray(items)){banner("⚠ Species lookup failed (eBird unreachable): "+
+        (items&&items.error||"")+' <a href="#" id="retryConn">retry</a>',"bad");
+        const rc=$("#retryConn");if(rc)rc.onclick=e=>{e.preventDefault();checkConnectivity(true);};
+        items=[];}
+    }catch(e){banner("⚠ Couldn't reach the server for species lookup: "+e,"bad");items=[];}
     box.innerHTML="";sel=-1;
     items.forEach((it,i)=>{const d=ce("div","acitem");
       d.innerHTML=`${it.name}<span class="sci">${it.sci||""}</span>`;
@@ -374,13 +412,21 @@ $("#pull").onclick=async()=>{
   for(const slot of ["A","B"]){
     const tx=STATE.taxa[slot];if(!tx)continue;
     const url=`/api/search?taxon=${tx.code}&age=${ages.join(",")}&count=${count}&sort=${sort}`;
-    try{const r=await fetch(url);const j=await r.json();
-      (j.assets||[]).forEach(it=>set.push({
+    try{const r=await fetch(url);const j=await r.json().catch(()=>({}));
+      if(!r.ok||j.error||!Array.isArray(j.assets)){
+        banner(`⚠ Couldn't pull ${tx.name} from the Macaulay Library: `+
+          `${j.error||("HTTP "+r.status)}. `+
+          `<a href="#" id="retryConn">check connection</a>`,"bad");
+        const rc=$("#retryConn");if(rc)rc.onclick=e=>{e.preventDefault();checkConnectivity(true);};
+        st.textContent="pull failed";continue;}
+      j.assets.forEach(it=>set.push({
         assetId:it.assetId,sp:slot,spName:tx.name,taxon:tx.code,
         indiv:it.ebirdChecklistId||("solo_"+it.assetId),
         rating:it.rating,meta:it}));
+      if(!j.assets.length)banner(`No ${tx.name} photos matched those filters.`,"warn");
       st.textContent=`A:${set.filter(b=>b.sp==="A").length}  B:${set.filter(b=>b.sp==="B").length}`;
-    }catch(e){st.textContent="error: "+e;}
+    }catch(e){banner(`⚠ Network error reaching the server for ${tx.name}: ${e}`,"bad");
+      st.textContent="error";}
   }
   STATE.workset=set;save();renderWorkset();updateHdr();$("#pull").disabled=false;
 };
@@ -400,7 +446,7 @@ function renderWorkset(){
   w.forEach((bird,i)=>{const t=ce("div","thumb");
     const done=STATE.ann[bird.assetId]&&hasInk(STATE.ann[bird.assetId]);
     if(done)t.classList.add("doneb");
-    t.innerHTML=`<img loading="lazy" src="/img/${bird.assetId}/320">
+    t.innerHTML=`<img loading="lazy" src="/img/${bird.assetId}/320" onerror="this.style.opacity=.2;this.title='image failed to load'">
       <span class="tag ${bird.sp}">${bird.sp}</span>
       <span class="st">★${bird.rating??"–"}</span>`;
     t.onclick=()=>{annIndex=i;$$(".tab").find(x=>x.dataset.v==="annotate").click();};
@@ -568,6 +614,8 @@ function loadBird(){const b=curBird();
     workCanvas.width=Math.round(IW*scale);workCanvas.height=Math.round(IH*scale);
     acv.width=workCanvas.width;acv.height=workCanvas.height;
     replayAndDraw();liveMeasure();};
+  aimg.onerror=()=>banner("⚠ Couldn't load photo "+b.assetId+" from the Macaulay Library "+
+    "(image server unreachable, or the asset is gone).","bad");
   aimg.src="/img/"+b.assetId+"/1200";
   const done=hasInk(STATE.ann[b.assetId]);
   $("#aMeta").innerHTML=`#<b>${b.assetId}</b> <span class="pill p${b.sp}">${b.sp} · ${b.spName}</span>
@@ -644,10 +692,10 @@ async function buildMatrix(){
   const names=featureNames();if(!names.length){$("#pcaStat").textContent="define features first";return null;}
   const birds=STATE.workset.filter(b=>{const r=STATE.ann[b.assetId];return r&&hasInk(r)&&!r.excl;});
   if(birds.length<3){$("#pcaStat").textContent="annotate at least 3 birds";return null;}
-  const rows=[];
+  const rows=[];let failed=0;
   for(let i=0;i<birds.length;i++){const b=birds[i];
     $("#pcaStat").textContent=`measuring ${i+1}/${birds.length}…`;
-    const A=await loadProcFor(b.assetId);if(!A)continue;
+    const A=await loadProcFor(b.assetId);if(!A){failed++;continue;}
     const W=A.W,H=A.H,rec=STATE.ann[b.assetId];
     const stByReg={};fs().regions.forEach(r=>{const m=strokesMask(rec.strokes[r.id],W,H);stByReg[r.id]=m?regionStats(A,m):null;});
     const vec=[];
@@ -655,6 +703,8 @@ async function buildMatrix(){
     fs().contrasts.forEach(c=>{const s1=stByReg[c.r1],s2=stByReg[c.r2];
       vec.push((s1&&s2)?(s1[c.m]-s2[c.m]):NaN);});
     rows.push({bird:b,label:b.sp,indiv:b.indiv+"|"+b.sp,vec});}
+  if(failed)banner(`⚠ ${failed} image${failed>1?"s":""} couldn't be loaded from the Macaulay `+
+    `Library and were left out of the analysis.`,"warn");
   return {names,rows};
 }
 // load an image off-DOM, decode, process — for batch measuring
@@ -956,6 +1006,9 @@ function renderMap(){if(!MAP)return;MAPLAYER.clearLayers();
 /* ============================================================ INIT */
 function restoreUI(){
   renderMetaPick();
+  $("#bannerX").onclick=clearBanner;
+  $("#testConn").onclick=()=>{banner("checking connection…","warn");checkConnectivity(true);};
+  checkConnectivity();
   if(STATE.taxa.A){$("#qA").value=STATE.taxa.A.name;$("#pickA").textContent=`✓ ${STATE.taxa.A.name} — ${STATE.taxa.A.sci} (${STATE.taxa.A.code})`;}
   if(STATE.taxa.B){$("#qB").value=STATE.taxa.B.name;$("#pickB").textContent=`✓ ${STATE.taxa.B.name} — ${STATE.taxa.B.sci} (${STATE.taxa.B.code})`;}
   if(STATE.workset.length)renderWorkset();
