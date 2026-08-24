@@ -319,14 +319,20 @@ function withTimeout(url,ms){const c=new AbortController();const t=setTimeout(()
   return fetch(url,{signal:c.signal}).finally(()=>clearTimeout(t));}
 
 // Light check on load: is OUR backend alive? (fast, no upstream calls)
+// Retries quietly a few times so a cold start / redeploy doesn't raise a false alarm.
 async function checkBackend(){
-  try{const r=await withTimeout("/healthz",8000);
-    if(r.ok){clearBanner();return true;}
-    banner("⚠ The app's backend returned an error ("+r.status+"). Try reloading.","bad");return false;}
-  catch(e){banner('⚠ The app can\'t reach its backend right now — it may be starting up or '+
-    'redeploying. <a href="#" id="retryConn">retry</a>',"bad");
-    const rc=$("#retryConn");if(rc)rc.onclick=ev=>{ev.preventDefault();
-      banner("checking…","warn");checkBackend();};return false;}
+  for(let i=0;i<4;i++){
+    try{const r=await withTimeout("/healthz",6000);
+      if(r.ok){clearBanner();return true;}}
+    catch(e){/* keep trying */}
+    await new Promise(res=>setTimeout(res,1200*(i+1)));
+  }
+  banner('The app is having trouble reaching its backend (it may still be waking up '+
+    'after a redeploy). Core features will still try to work. '+
+    '<a href="#" id="retryConn2">retry</a>',"warn");
+  const rc=$("#retryConn2");if(rc)rc.onclick=ev=>{ev.preventDefault();
+    banner("checking…","warn");checkBackend();};
+  return false;
 }
 
 // Deep check (Test connection button, or a retry link): probe Macaulay + eBird.
