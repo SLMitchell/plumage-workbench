@@ -69,6 +69,21 @@ kbd{font-family:var(--mono);font-size:11px;background:var(--panel2);border:1px s
   border:1px solid var(--line);border-radius:12px;overflow:hidden;align-self:flex-start}
 .astage img{display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none}
 canvas.paint{position:absolute;inset:0;width:100%;height:100%;cursor:none;touch-action:none}
+#azoom{position:relative;transform-origin:0 0;will-change:transform}
+.zoombar{position:absolute;top:8px;right:8px;z-index:6;display:flex;gap:4px;align-items:center;
+  background:rgba(20,19,15,.82);border:1px solid var(--line);border-radius:9px;padding:4px 6px;line-height:1}
+.zoombar button{padding:3px 8px;font-size:14px;line-height:1}
+.zoombar .zlvl{font-family:var(--mono);font-size:11px;color:var(--mut);min-width:38px;text-align:center}
+.zoombar button.on{background:var(--acc);color:#14130f;border-color:var(--acc)}
+#measList{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}
+.measitem{border:1px solid var(--line);border-radius:9px;padding:9px 11px;background:var(--panel2);cursor:pointer}
+.measitem:hover{border-color:var(--acc)}
+.measitem.on{border-color:var(--acc);background:rgba(116,183,172,.08)}
+.measitem .mhead{display:flex;align-items:center;gap:7px;font-size:13px}
+.measitem .mtick{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:5px;
+  border:1px solid var(--line);font-size:12px;color:var(--mut)}
+.measitem.on .mtick{background:var(--acc);color:#14130f;border-color:var(--acc)}
+.measitem .mdesc{font-size:11.5px;color:var(--mut);line-height:1.45;margin-top:5px}
 .aside{width:300px;flex:none}
 .regbtn{display:flex;align-items:center;gap:7px;width:100%;justify-content:flex-start;margin-bottom:4px}
 .regbtn.on{outline:2px solid var(--acc)}
@@ -166,10 +181,10 @@ canvas.paint{position:absolute;inset:0;width:100%;height:100%;cursor:none;touch-
   </div>
   <div class="card">
     <h2>Measurements — computed for every region</h2>
-    <div class="row" id="measList"></div>
-    <p class="hint" style="margin:12px 0 0">Colours are grey-world white-balanced, then converted to CIELAB.
-      <b>L*</b> lightness · <b>a*</b> red–green · <b>b*</b> blue–yellow (warmth) · chroma = colour intensity ·
-      R/G/B : photo = region's raw channel ÷ whole-photo mean. Chevron metrics measure dark barring/vermiculation texture.</p>
+    <p class="hint" style="margin:0 0 12px">Click a measurement to include it. Every colour is grey-world
+      white-balanced (neutralising the light) before measuring, and CIELAB tones are read on that
+      balanced image; the R/G/B : photo ratios are read on the original image so the ratio itself cancels lighting.</p>
+    <div id="measList"></div>
   </div>
   <div class="card">
     <h2>Region contrasts <span class="mut small">(optional — difference between two regions)</span></h2>
@@ -188,8 +203,17 @@ canvas.paint{position:absolute;inset:0;width:100%;height:100%;cursor:none;touch-
 <div class="view" id="v-annotate">
   <div class="row" style="align-items:flex-start">
     <div class="astage" id="astage">
-      <img id="aimg" alt="" crossorigin="anonymous">
-      <canvas class="paint" id="acv"></canvas>
+      <div class="zoombar">
+        <button id="zOut" title="Zoom out (−)">−</button>
+        <span class="zlvl" id="zLvl">100%</span>
+        <button id="zIn" title="Zoom in (+)">+</button>
+        <button id="zReset" title="Fit image (0)">Fit</button>
+        <button id="zPan" title="Pan mode — drag to move (or hold Alt / middle-drag)">✋</button>
+      </div>
+      <div id="azoom">
+        <img id="aimg" alt="" crossorigin="anonymous">
+        <canvas class="paint" id="acv"></canvas>
+      </div>
     </div>
     <div class="aside">
       <div class="card" style="margin-bottom:12px">
@@ -222,7 +246,8 @@ canvas.paint{position:absolute;inset:0;width:100%;height:100%;cursor:none;touch-
     </div>
   </div>
   <p class="hint" style="margin-top:8px"><kbd>Space</kbd>/<kbd>→</kbd> next · <kbd>←</kbd> prev ·
-    <kbd>E</kbd> erase · <kbd>[ ]</kbd> brush · <kbd>⌫</kbd> undo · number keys pick region.</p>
+    <kbd>E</kbd> erase · <kbd>[ ]</kbd> brush · <kbd>⌫</kbd> undo · <kbd>1–9</kbd> pick region ·
+    <kbd>scroll</kbd> zoom · <kbd>+</kbd>/<kbd>−</kbd> zoom · <kbd>0</kbd> fit · <kbd>H</kbd> or Alt/middle-drag to pan.</p>
 </div>
 
 <!-- ============ ANALYSE ============ -->
@@ -299,11 +324,32 @@ canvas.paint{position:absolute;inset:0;width:100%;height:100%;cursor:none;touch-
 /* ============================================================ CONSTANTS */
 const EPS=1e-6, MAXW=900;
 const MEASURES=[
-  {k:"L",label:"L* lightness"},{k:"a",label:"a* red–green"},{k:"b",label:"b* warmth"},
-  {k:"chroma",label:"chroma"},{k:"sat",label:"saturation"},
-  {k:"R_rel",label:"R : photo"},{k:"G_rel",label:"G : photo"},{k:"B_rel",label:"B : photo"},
-  {k:"chev_bold",label:"chevron boldness"},{k:"chev_dens",label:"chevron density"},
-  {k:"chev_period",label:"chevron periodicity"},
+  {k:"L",label:"L* lightness",desc:"CIELAB lightness, 0 (black) to 100 (white), after grey-world "+
+    "white-balance. How pale or dark the region is. Higher = paler."},
+  {k:"a",label:"a* red–green",desc:"CIELAB red–green axis. Positive = redder (rufous/magenta), "+
+    "negative = greener. Tracks warm red tones like rufous crowns and tails."},
+  {k:"b",label:"b* warmth (blue–yellow)",desc:"CIELAB blue–yellow axis. Positive = yellower/warmer "+
+    "(buff, sandy, warm brown), negative = bluer/colder. Often the strongest separator of "+
+    "warm-buff vs cold-grey plumage."},
+  {k:"chroma",label:"chroma (colour intensity)",desc:"√(a*²+b*²) — distance from neutral grey in "+
+    "CIELAB, i.e. how strongly coloured the region is regardless of hue. Low = washed-out/grey, "+
+    "high = richly coloured."},
+  {k:"sat",label:"saturation (HSV)",desc:"HSV saturation, 0–1: colour vividness relative to "+
+    "brightness. Similar intent to chroma but more sensitive to bright, punchy patches."},
+  {k:"R_rel",label:"R : photo",desc:"Region's mean RED channel ÷ the whole photo's mean red, on the "+
+    "original (pre-white-balance) image so the ratio itself cancels lighting. >1 = region redder "+
+    "than the overall scene."},
+  {k:"G_rel",label:"G : photo",desc:"Region's mean GREEN channel ÷ the whole photo's mean green "+
+    "(original image). >1 = region greener/relatively brighter in green than the scene."},
+  {k:"B_rel",label:"B : photo",desc:"Region's mean BLUE channel ÷ the whole photo's mean blue "+
+    "(original image). >1 = region bluer/cooler than the scene; <1 = warmer."},
+  {k:"chev_bold",label:"chevron boldness",desc:"Contrast (standard deviation) of dark barring / "+
+    "vermiculation after removing the local average brightness. Higher = stronger, more contrasty bars."},
+  {k:"chev_dens",label:"chevron density",desc:"Fraction of the region notably darker than its local "+
+    "surroundings — how much of the area is covered by dark markings. Higher = more heavily marked."},
+  {k:"chev_period",label:"chevron periodicity",desc:"How regularly spaced the bars are (peak strength "+
+    "in the frequency spectrum of the brightness profile along the body). High = evenly repeating "+
+    "barring; low = irregular or mottled."},
 ];
 const MLABEL=Object.fromEntries(MEASURES.map(m=>[m.k,m.label]));
 const REGCOLORS=["#f2b134","#3fa7d6","#b06fd6","#5fbf74","#e0894f","#e05f8a","#54c7c0","#c9c24a","#8f7de0"];
@@ -488,13 +534,15 @@ function renderFeatures(){
   $$(".rgDel").forEach(b=>b.onclick=()=>{const id=fs().regions[+b.dataset.i].id;
     fs().regions.splice(+b.dataset.i,1);
     fs().contrasts=fs().contrasts.filter(c=>c.r1!==id&&c.r2!==id);save();renderFeatures();});
-  // measures
+  // measures — each shown with a full description
   const ml=$("#measList");ml.innerHTML="";
   MEASURES.forEach(m=>{const on=fs().measures.includes(m.k);
-    const c=ce("label","chk"+(on?" on":""));c.innerHTML=`<input type="checkbox" ${on?"checked":""}>${m.label}`;
-    c.onclick=e=>{e.preventDefault();const idx=fs().measures.indexOf(m.k);
+    const it=ce("div","measitem"+(on?" on":""));
+    it.innerHTML=`<div class="mhead"><span class="mtick">${on?"✓":"+"}</span><b>${m.label}</b></div>
+      <div class="mdesc">${m.desc}</div>`;
+    it.onclick=()=>{const idx=fs().measures.indexOf(m.k);
       if(idx>=0)fs().measures.splice(idx,1);else fs().measures.push(m.k);save();renderFeatures();};
-    ml.appendChild(c);});
+    ml.appendChild(it);});
   // contrasts selectors
   const opts=fs().regions.map(r=>`<option value="${r.id}">${r.name}</option>`).join("");
   $("#cR1").innerHTML=opts;$("#cR2").innerHTML=opts;
@@ -612,6 +660,24 @@ function regionStats(A,mask){ // A=analyzeImage result; returns all measures or 
 /* ============================================================ ANNOTATE */
 let annIndex=0,paintReg=null,eraseOn=false,brushPx=22,painting=false,curStroke=null,IW=1,IH=1;
 let mx=-99,my=-99, procCache={}; // assetId -> analyzeImage result (working res)
+let zoom=1,panX=0,panY=0,panMode=false,panning=false,panStart=null;
+const ZMIN=1,ZMAX=16;
+const azoom=()=>document.getElementById("azoom");
+function applyZoom(){azoom().style.transform=`translate(${panX}px,${panY}px) scale(${zoom})`;
+  const zl=document.getElementById("zLvl");if(zl)zl.textContent=Math.round(zoom*100)+"%";}
+function clampPan(){const st=document.getElementById("astage");if(!st)return;
+  const w=st.clientWidth,h=st.clientHeight;
+  // keep the (scaled) image from drifting fully out of view
+  const minX=Math.min(0,w-w*zoom),minY=Math.min(0,h-h*zoom);
+  panX=Math.max(minX,Math.min(0,panX));panY=Math.max(minY,Math.min(0,panY));}
+function setZoom(z,cx,cy){const st=document.getElementById("astage");const rect=st.getBoundingClientRect();
+  if(cx==null){cx=rect.width/2;cy=rect.height/2;}
+  const contentX=(cx-panX)/zoom,contentY=(cy-panY)/zoom;
+  zoom=Math.max(ZMIN,Math.min(ZMAX,z));
+  panX=cx-contentX*zoom;panY=cy-contentY*zoom;clampPan();applyZoom();}
+function resetZoom(){zoom=1;panX=0;panY=0;applyZoom();}
+function setPanMode(v){panMode=v;const b=document.getElementById("zPan");if(b)b.classList.toggle("on",v);
+  if(acv)acv.style.cursor=v?"grab":"none";}
 const aimg=$("#aimg"),acv=$("#acv"),actx=acv.getContext("2d",{willReadFrequently:true});
 const workCanvas=ce("canvas"); // offscreen for pixel math
 function curBird(){return STATE.workset[annIndex];}
@@ -636,7 +702,7 @@ function loadBird(){const b=curBird();
     const scale=Math.min(1,MAXW/Math.max(IW,IH));
     workCanvas.width=Math.round(IW*scale);workCanvas.height=Math.round(IH*scale);
     acv.width=workCanvas.width;acv.height=workCanvas.height;
-    replayAndDraw();liveMeasure();};
+    resetZoom();replayAndDraw();liveMeasure();};
   aimg.onerror=()=>banner("⚠ Couldn't load photo "+b.assetId+" from the Macaulay Library "+
     "(image server unreachable, or the asset is gone).","bad");
   aimg.src="/img/"+b.assetId+"/1200";
@@ -665,18 +731,32 @@ function pos(e){const rect=acv.getBoundingClientRect();
           Math.max(0,Math.min(acv.height,(e.clientY-rect.top)/rect.height*acv.height)),
           brushPx*acv.width/rect.width];}
 function addPt(x,y){curStroke.pts.push([+(x/acv.width).toFixed(4),+(y/acv.height).toFixed(4)]);}
-acv.addEventListener("pointerdown",e=>{if(!paintReg)return;e.preventDefault();acv.setPointerCapture(e.pointerId);
+function isPan(e){return panMode||e.altKey||e.button===1;}
+acv.addEventListener("pointerdown",e=>{
+  if(isPan(e)){e.preventDefault();acv.setPointerCapture(e.pointerId);
+    panning=true;panStart=[e.clientX-panX,e.clientY-panY];acv.style.cursor="grabbing";return;}
+  if(!paintReg)return;e.preventDefault();acv.setPointerCapture(e.pointerId);
   const[x,y,rpx]=pos(e);curStroke={r:+(rpx/acv.width).toFixed(4),e:eraseOn,pts:[]};
   getStrokes(paintReg).push(curStroke);painting=true;addPt(x,y);mx=x;my=y;
   const r=annRec(curBird());r.excl=false;redraw();});
-acv.addEventListener("pointermove",e=>{const[x,y,rpx]=pos(e);mx=x;my=y;
+acv.addEventListener("pointermove",e=>{
+  if(panning){panX=e.clientX-panStart[0];panY=e.clientY-panStart[1];clampPan();applyZoom();return;}
+  const[x,y,rpx]=pos(e);mx=x;my=y;
   if(painting){const p=curStroke.pts,last=p.length?[p[p.length-1][0]*acv.width,p[p.length-1][1]*acv.height]:[x,y];
     const dx=x-last[0],dy=y-last[1],dist=Math.hypot(dx,dy),step=Math.max(rpx*0.3,1),nn=Math.floor(dist/step);
     for(let j=1;j<=nn;j++)addPt(last[0]+dx*j/nn,last[1]+dy*j/nn);if(nn===0&&p.length===0)addPt(x,y);}
   redraw();});
 function endStroke(){if(painting){painting=false;curStroke=null;save();updateHdr();liveMeasure();renderWorksetDot();}}
-acv.addEventListener("pointerup",endStroke);acv.addEventListener("pointercancel",endStroke);
+function endPointer(e){if(panning){panning=false;acv.style.cursor=panMode?"grab":"none";return;}endStroke();}
+acv.addEventListener("pointerup",endPointer);acv.addEventListener("pointercancel",endPointer);
 acv.addEventListener("pointerleave",()=>{mx=-99;redraw();});
+// wheel to zoom toward the cursor
+$("#astage").addEventListener("wheel",e=>{e.preventDefault();const rect=$("#astage").getBoundingClientRect();
+  const f=e.deltaY<0?1.15:1/1.15;setZoom(zoom*f,e.clientX-rect.left,e.clientY-rect.top);},{passive:false});
+$("#zIn").onclick=()=>setZoom(zoom*1.3);
+$("#zOut").onclick=()=>setZoom(zoom/1.3);
+$("#zReset").onclick=resetZoom;
+$("#zPan").onclick=()=>setPanMode(!panMode);
 function renderWorksetDot(){/* lightweight: mark grid dirty on next render */}
 
 function getProc(){const id=curBird().assetId;if(procCache[id])return procCache[id];
@@ -707,7 +787,11 @@ document.addEventListener("keydown",e=>{if($("#v-annotate").classList.contains("
   else if(e.key==="[")$("#aBrush").value=brushPx=Math.max(1,brushPx-2),$("#aBsz").textContent=brushPx,redraw();
   else if(e.key==="]")$("#aBrush").value=brushPx=Math.min(90,brushPx+2),$("#aBsz").textContent=brushPx,redraw();
   else if(e.key==="Backspace"){e.preventDefault();$("#aUndo").click();}
-  else if(/[0-9]/.test(k)){const i=+k-1;if(fs().regions[i]){paintReg=fs().regions[i].id;renderRegBtns();redraw();}}});
+  else if(e.key==="+"||e.key==="="){setZoom(zoom*1.3);}
+  else if(e.key==="-"||e.key==="_"){setZoom(zoom/1.3);}
+  else if(e.key==="0"){resetZoom();}
+  else if(k==="h"){setPanMode(!panMode);}
+  else if(/[1-9]/.test(k)){const i=+k-1;if(fs().regions[i]){paintReg=fs().regions[i].id;renderRegBtns();redraw();}}});
 
 /* ============================================================ FEATURE MATRIX + PCA + STATS */
 let LAST=null; // {names, rows:[{bird,label,indiv,vec}], scores, ev}
