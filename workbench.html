@@ -1166,12 +1166,10 @@ function valueByAsset(mode){const map={};if(!LAST)return map;
     else if(mode==="PC2")v=LAST.pca.scores[i][1];
     else{const nm=mode.slice(5),j=LAST.mat.names.indexOf(nm);v=j>=0?r.vec[j]:NaN;}
     if(v!=null&&!isNaN(v))map[r.bird.assetId]=v;});return map;}
-const VIRIDIS=[[68,1,84],[72,40,120],[62,74,137],[49,104,142],[38,130,142],[31,158,137],
-  [53,183,121],[110,206,88],[181,222,43],[253,231,37]];
-function scaleColor(t){t=Math.max(0,Math.min(1,isNaN(t)?0:t));const n=VIRIDIS.length-1,x=t*n;
-  const i=Math.min(n-1,Math.floor(x)),u=x-i,a=VIRIDIS[i],b=VIRIDIS[i+1];
-  return `rgb(${Math.round(a[0]+(b[0]-a[0])*u)},${Math.round(a[1]+(b[1]-a[1])*u)},${Math.round(a[2]+(b[2]-a[2])*u)})`;}
-const VIRIDIS_CSS="linear-gradient(90deg,rgb(68,1,84),rgb(49,104,142),rgb(31,158,137),rgb(110,206,88),rgb(253,231,37))";
+// white (low) -> bright red (high)
+function scaleColor(t){t=Math.max(0,Math.min(1,isNaN(t)?0:t));const lo=[255,255,255],hi=[227,26,28];
+  return `rgb(${Math.round(lo[0]+(hi[0]-lo[0])*t)},${Math.round(lo[1]+(hi[1]-lo[1])*t)},${Math.round(lo[2]+(hi[2]-lo[2])*t)})`;}
+const SCALE_CSS="linear-gradient(90deg,rgb(255,255,255),rgb(227,26,28))";
 function renderMap(){if(!MAP)return;MAPLAYER.clearLayers();
   const colBy=$("#mapColBy").value,which=$("#mapWhich").value;
   let birds=STATE.workset.slice();
@@ -1205,10 +1203,10 @@ function renderMap(){if(!MAP)return;MAPLAYER.clearLayers();
   if(colBy==="species"){sb.style.display="none";}
   else{sb.style.display="block";
     $("#mapScaleBody").innerHTML=`<div class="row"><span class="mono small">${vmin.toFixed(2)}</span>
-      <span style="display:inline-block;width:220px;height:14px;border-radius:7px;background:${VIRIDIS_CSS}"></span>
+      <span style="display:inline-block;width:220px;height:14px;border-radius:7px;border:1px solid var(--line);background:${SCALE_CSS}"></span>
       <span class="mono small">${vmax.toFixed(2)}</span>
-      <span class="mut small">— ${colBy} (viridis)</span></div>
-      <p class="hint" style="margin:6px 0 0">Fill = ${colBy} (viridis, low→high). Ring colour = species
+      <span class="mut small">— ${colBy}</span></div>
+      <p class="hint" style="margin:6px 0 0">Fill = ${colBy} (white→red, low→high). Ring colour = species
       (<span style="color:var(--A)">A</span>/<span style="color:var(--B)">B</span>).
       Grey markers = value not available (not annotated${$("#aggMode").value==="indiv"?", or aggregated away":""}).</p>`;}
 }
