@@ -178,6 +178,10 @@ canvas.paint{position:absolute;inset:0;width:100%;height:100%;cursor:none;touch-
       <input id="newReg" placeholder="region name, e.g. crown, flank, bill-base" style="width:260px">
       <button id="addReg">+ Add region</button>
     </div>
+    <p class="hint" style="margin:10px 0 0"><b>exclude dark</b>: for a region like the eye, tick this so pixels
+      darker than the L* cutoff (the black pupil, and any deep shadow) are dropped and only the iris colour is
+      measured. Paint the whole eye, then nudge the cutoff until the live panel shows the pupil pixels excluded.
+      Leave it off for chevron/texture regions, where the dark markings are the signal.</p>
   </div>
   <div class="card">
     <h2>Measurements — computed for every region</h2>
@@ -532,12 +536,23 @@ function renderWorkset(){
 /* ============================================================ FEATURES editor */
 function renderFeatures(){
   const rl=$("#regList");rl.innerHTML="";
-  fs().regions.forEach((rg,i)=>{const row=ce("div","reg-row");
+  fs().regions.forEach((rg,i)=>{const row=ce("div","reg-row");const on=rg.darkCut!=null;
     row.innerHTML=`<span class="sw" style="background:${rg.color}"></span>
-      <input value="${rg.name}" data-i="${i}" class="rgName" style="width:220px">
+      <input value="${rg.name}" data-i="${i}" class="rgName" style="width:200px">
+      <label class="rgDarkChk small" data-i="${i}" title="Ignore near-black pixels (e.g. a pupil) when measuring this region">
+        <input type="checkbox" ${on?"checked":""}> exclude dark</label>
+      <span class="small mut">L*&lt; <input type="number" class="rgDarkV" data-i="${i}"
+        value="${on?rg.darkCut:25}" min="0" max="100" step="1" style="width:54px" ${on?"":"disabled"}></span>
       <button data-i="${i}" class="rgDel">remove</button>`;
     rl.appendChild(row);});
   $$(".rgName").forEach(inp=>inp.onchange=()=>{fs().regions[+inp.dataset.i].name=inp.value.trim()||"region";save();renderFeatures();});
+  $$(".rgDarkChk").forEach(lab=>{const i=+lab.dataset.i,cb=lab.querySelector("input");
+    cb.onchange=()=>{const rg=fs().regions[i];
+      if(cb.checked){const v=rl.querySelector('.rgDarkV[data-i="'+i+'"]');rg.darkCut=v?(+v.value||25):25;}
+      else delete rg.darkCut;
+      save();renderFeatures();};});
+  $$(".rgDarkV").forEach(inp=>inp.onchange=()=>{const rg=fs().regions[+inp.dataset.i];
+    if(rg.darkCut!=null){rg.darkCut=Math.max(0,Math.min(100,+inp.value||0));save();}});
   $$(".rgDel").forEach(b=>b.onclick=()=>{const id=fs().regions[+b.dataset.i].id;
     fs().regions.splice(+b.dataset.i,1);
     fs().contrasts=fs().contrasts.filter(c=>c.r1!==id&&c.r2!==id);save();renderFeatures();});
@@ -652,16 +667,22 @@ function chevron(gray,mask,W,H){
     if(tot>EPS){let mx=0;for(let f=2;f<=K;f++)if(mag[f]>mx)mx=mag[f];period=mx/(tot+EPS);}}
   return{bold,dens,period};
 }
-function regionStats(A,mask){ // A=analyzeImage result; returns all measures or nulls
+function regionStats(A,mask,darkCut){ // darkCut: exclude pixels with L* < darkCut (e.g. pupil). null/undef = off
   const {W,H,oR,oG,oB,L,A:aa,B:bb,gray,sat,mR,mG,mB}=A;
-  let n=0,sL=0,sa=0,sb=0,sc=0,ss=0,sR=0,sG=0,sB=0;
-  for(let i=0;i<W*H;i++)if(mask[i]){n++;sL+=L[i];sa+=aa[i];sb+=bb[i];
+  const cut=(darkCut==null)?null:+darkCut;
+  let n=0,excl=0,sL=0,sa=0,sb=0,sc=0,ss=0,sR=0,sG=0,sB=0;
+  let effMask=mask;
+  if(cut!=null)effMask=new Uint8Array(W*H);
+  for(let i=0;i<W*H;i++)if(mask[i]){
+    if(cut!=null&&L[i]<cut){excl++;continue;}
+    if(cut!=null)effMask[i]=1;
+    n++;sL+=L[i];sa+=aa[i];sb+=bb[i];
     sc+=Math.hypot(aa[i],bb[i]);ss+=sat[i];sR+=oR[i];sG+=oG[i];sB+=oB[i];}
-  if(n<30)return null;
-  const chev=chevron(gray,mask,W,H);
+  if(n<30)return null;   // too little left after excluding dark pixels
+  const chev=chevron(gray,effMask,W,H);
   return {L:sL/n,a:sa/n,b:sb/n,chroma:sc/n,sat:ss/n,
     R_rel:(sR/n)/mR,G_rel:(sG/n)/mG,B_rel:(sB/n)/mB,
-    chev_bold:chev.bold,chev_dens:chev.dens,chev_period:chev.period,n};
+    chev_bold:chev.bold,chev_dens:chev.dens,chev_period:chev.period,n,excl};
 }
 
 /* ============================================================ ANNOTATE */
@@ -776,9 +797,12 @@ function getProc(){const id=curBird().assetId;if(procCache[id])return procCache[
   catch(err){$("#aLive").innerHTML=`<span style="color:var(--bad)">pixel read blocked: ${err.message}</span>`;return null;}}
 function liveMeasure(){const A=getProc();if(!A)return;const W=acv.width,H=acv.height;
   let html="";fs().regions.forEach(r=>{const m=strokesMask(getStrokes(r.id),W,H);
-    if(!m){return;}const st=regionStats(A,m);if(!st){html+=`<div><span class="sw" style="background:${r.color}"></span>${r.name}: too small</div>`;return;}
+    if(!m){return;}const st=regionStats(A,m,r.darkCut);
+    if(!st){html+=`<div><span class="sw" style="background:${r.color}"></span>${r.name}: too small`+
+      (r.darkCut!=null?" after excluding dark pixels":"")+`</div>`;return;}
     const vals=fs().measures.map(k=>`${k}=${fmt(st[k])}`).join("  ");
-    html+=`<div style="margin-bottom:4px"><span class="sw" style="background:${r.color}"></span><b>${r.name}</b> <span class="mut">(${st.n}px)</span><br>${vals}</div>`;});
+    const px=`${st.n}px`+(st.excl?`, ${st.excl} dark excl`:"");
+    html+=`<div style="margin-bottom:4px"><span class="sw" style="background:${r.color}"></span><b>${r.name}</b> <span class="mut">(${px})</span><br>${vals}</div>`;});
   $("#aLive").innerHTML=html||"paint a region…";}
 function fmt(v){return (v==null||isNaN(v))?"–":(Math.abs(v)<10?v.toFixed(3):v.toFixed(1));}
 function setBrush(v){brushPx=Math.max(1,Math.min(90,Math.round(v)));
@@ -815,7 +839,7 @@ async function buildMatrix(){
     $("#pcaStat").textContent=`measuring ${i+1}/${birds.length}…`;
     const A=await loadProcFor(b.assetId);if(!A){failed++;continue;}
     const W=A.W,H=A.H,rec=STATE.ann[b.assetId];
-    const stByReg={};fs().regions.forEach(r=>{const m=strokesMask(rec.strokes[r.id],W,H);stByReg[r.id]=m?regionStats(A,m):null;});
+    const stByReg={};fs().regions.forEach(r=>{const m=strokesMask(rec.strokes[r.id],W,H);stByReg[r.id]=m?regionStats(A,m,r.darkCut):null;});
     const vec=[];
     fs().regions.forEach(r=>fs().measures.forEach(mk=>{const s=stByReg[r.id];vec.push(s?s[mk]:NaN);}));
     fs().contrasts.forEach(c=>{const s1=stByReg[c.r1],s2=stByReg[c.r2];
